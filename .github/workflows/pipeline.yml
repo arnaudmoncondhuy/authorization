@@ -1,0 +1,46 @@
+name: Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # La matrice n'est pas décorative : le manifeste promet « php >=8.4 », et une routine jouée
+  # sur une seule version ne prouve rien pour l'autre. Un paquet qui ne tourne que chez son
+  # auteur n'est pas un paquet.
+  qualite:
+    name: Qualité (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      # L'historique complet est nécessaire : Gitleaks scanne tous les commits,
+      # pas seulement le dernier.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Installer les dépendances
+        run: composer install --no-interaction --no-progress
+
+      - name: Routine qualité
+        run: ./check.sh

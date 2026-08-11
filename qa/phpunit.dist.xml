@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Configuration PHPUnit du paquet — une seule, ici. Une seconde à la racine finirait par en
+    diverger, et un test passerait d'un côté sans passer de l'autre.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="../vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="../vendor/autoload.php"
+         cacheDirectory="../var/phpunit.cache"
+         executionOrder="depends,defects"
+         failOnDeprecation="true"
+         failOnNotice="true"
+         failOnWarning="true"
+         failOnRisky="true"
+         beStrictAboutOutputDuringTests="true"
+         colors="true">
+
+    <php>
+        <ini name="display_errors" value="1"/>
+        <ini name="error_reporting" value="-1"/>
+    </php>
+
+    <testsuites>
+        <!--
+            « unitaires » n'instancie aucun conteneur : elle éprouve le contrat et les passes
+            sur des objets construits à la main, et tourne en quelques millisecondes.
+        -->
+        <testsuite name="unitaires">
+            <directory>../tests/Unit</directory>
+        </testsuite>
+        <!--
+            « integration » démarre un vrai noyau Symfony. C'est la seule suite qui prouve que
+            le bundle est câblé : les passes testées à la main resteraient vertes même si plus
+            personne ne les branchait.
+        -->
+        <testsuite name="integration">
+            <directory>../tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <source ignoreSuppressionOfDeprecations="true">
+        <include>
+            <directory>../src</directory>
+        </include>
+    </source>
+</phpunit>

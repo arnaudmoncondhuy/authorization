@@ -1,0 +1,74 @@
+# Les couches du paquet, et le sens dans lequel elles ont le droit de se connaître.
+#
+# Ce fichier tient la promesse centrale du paquet : le contrat entre dans le domaine d'une
+# application sans y faire entrer Symfony. Il ne le tient que si `Contract` ne cite personne.
+
+deptrac:
+  paths:
+    - ../src
+
+  layers:
+    # ── Contract : ce qu'une application importe dans son domaine ────────────────────────
+    # Les classes posées à la racine de src/, la classe de bundle exceptée — celle-ci doit y
+    # rester pour que `getPath()` trouve config/, mais elle branche Symfony et n'a donc rien
+    # à faire ici.
+    #
+    # Aucune dépendance, pas même le framework : c'est ce qui rend le contrat citable depuis
+    # un domaine pur, et c'est la seule raison d'être de ce découpage.
+    - name: Contract
+      collectors:
+        - type: bool
+          must:
+            - type: classLike
+              value: '^ArnaudMoncondhuy\\Authorization\\[A-Za-z0-9_]+$'
+          must_not:
+            - type: classLike
+              value: '^ArnaudMoncondhuy\\Authorization\\AuthorizationBundle$'
+
+    # ── Testing : l'outil livré aux applications ─────────────────────────────────────────
+    # Il lit les attributs et les corps de méthode, donc il connaît le contrat. Il ne connaît
+    # rien d'autre — surtout pas un cadre de test : il rend une liste, il n'assertionne pas.
+    - name: Testing
+      collectors:
+        - type: classLike
+          value: '^ArnaudMoncondhuy\\Authorization\\Testing\\.+$'
+
+    # ── DependencyInjection : les trois refus de compilation ─────────────────────────────
+    - name: DependencyInjection
+      collectors:
+        - type: classLike
+          value: '^ArnaudMoncondhuy\\Authorization\\DependencyInjection\\.+$'
+
+    # ── Bridge : les adaptateurs, nommés par le fournisseur qu'ils branchent ─────────────
+    - name: Bridge
+      collectors:
+        - type: classLike
+          value: '^ArnaudMoncondhuy\\Authorization\\Bridge\\.+$'
+
+    # ── Bundle : le point de montage ─────────────────────────────────────────────────────
+    - name: Bundle
+      collectors:
+        - type: classLike
+          value: '^ArnaudMoncondhuy\\Authorization\\AuthorizationBundle$'
+
+  ruleset:
+    # L'invariant du paquet. Tout le reste en découle.
+    Contract: []
+
+    Testing:
+      - Contract
+
+    DependencyInjection:
+      - Contract
+
+    Bridge:
+      - Contract
+
+    # Le bundle pose le tag sur le contrat et enregistre les passes. Il ne connaît pas les
+    # adaptateurs : ceux-ci sont déclarés en configuration, sous condition.
+    Bundle:
+      - Contract
+      - DependencyInjection
+
+  # Aucune violation tolérée. Une dette figée ici cesse d'être visible.
+  skip_violations: []

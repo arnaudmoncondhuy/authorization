@@ -1,0 +1,18 @@
+parameters:
+    # Le niveau 9 ajoute le typage strict de `mixed`, que peu de code annote.
+    level: 8
+
+    paths:
+        - ../src
+        - ../tests
+
+    excludePaths:
+        - ../vendor/*
+
+    # Une annotation `@phpstan-ignore` qui ne correspond plus à aucune erreur fait échouer
+    # l'analyse.
+    reportUnmatchedIgnoredErrors: true
+
+    # Aucune erreur ignorée, et pas de fichier de baseline : une baseline transforme la dette
+    # en silence.
+    ignoreErrors: []

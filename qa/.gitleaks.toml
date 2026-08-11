@@ -1,0 +1,24 @@
+# Détection de secrets — configuration du dépôt.
+#
+# `gitleaks detect` scanne l'HISTORIQUE COMPLET, pas seulement le diff en cours. C'est
+# volontaire : un secret commité il y a trois mois puis « supprimé » est toujours dans les
+# objets git, donc toujours exposé à quiconque clone le dépôt.
+#
+# ⚠️ Un secret détecté ne se règle PAS en l'ajoutant ci-dessous. L'ordre est : (1) faire tourner
+#    le secret chez son émetteur, (2) réécrire l'historique s'il y est, (3) et seulement alors,
+#    si la valeur reste dans l'historique et qu'elle est morte, l'inscrire ici.
+
+title = "arnaudmoncondhuy/authorization"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Chemins sans secret par construction"
+
+paths = [
+    # Dépendances et fichiers générés : ce qui s'y trouve ne vient pas de nous.
+    '''vendor/''',
+    '''var/''',
+    '''qa/bin/''',
+]
