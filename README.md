@@ -1,0 +1,242 @@
+# arnaudmoncondhuy/authorization
+
+Un droit se déclare **une fois**, sur le verbe métier. Le conteneur refuse de compiler sinon,
+et l'inventaire des droits se dérive du code.
+
+```php
+#[RequiresPermission(InvoicePermission::Finalize)]
+#[RequiresPermission(InvoicePermission::Backdate)]
+final readonly class FinalizeInvoiceUseCase implements UseCase
+{
+    public function __construct(private Authorizer $access)
+    {
+    }
+
+    public function __invoke(string $number, ?\DateTimeImmutable $backdatedTo = null): void
+    {
+        $this->access->require(InvoicePermission::Finalize);
+
+        if (null !== $backdatedTo) {
+            $this->access->require(InvoicePermission::Backdate);
+        }
+    }
+}
+```
+
+Une page, une API, un outil pour IA, une commande : toutes appellent ce verbe, aucune ne
+redéclare ses droits. C'est ce qui fait qu'une capacité ne peut pas diverger d'une surface à
+l'autre — il n'y a qu'un endroit où elle est écrite.
+
+## Ce que le paquet garantit
+
+Trois règles, et chacune **arrête la compilation du conteneur**. Pas un contrôle
+d'intégration continue qu'on peut contourner : l'application ne démarre pas, y compris sur le
+poste de qui a écrit la faute.
+
+| Règle | Ce qu'elle empêche |
+|---|---|
+| Tout cas d'usage déclare au moins un droit | un verbe qui s'exécute sans arbitrage, et qu'on ne peut accorder à personne |
+| Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
+| Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre |
+
+Une quatrième règle ne peut pas s'y tenir : rapprocher ce que l'attribut **déclare** de ce que
+le corps **réclame** demande de lire un corps de méthode, ce qu'aucune passe de compilation ne
+fait. Elle est livrée comme outil de test — voir plus bas.
+
+## Ce que le paquet ne fait pas
+
+**Il ne décide rien.** Savoir si l'utilisateur courant détient `invoice.finalize` reste
+l'affaire d'un voter que vous écrivez. Ce paquet garantit seulement qu'aucune surface ne peut
+exposer un verbe métier sans que le droit correspondant soit nommé, unique, et réclamé dans le
+corps de la méthode.
+
+Il ne fournit ni stockage des droits, ni modèle de rôles, ni écran d'administration. Le modèle
+appartient au projet : rôles, groupes, droits par compte, ou les trois à la fois — le paquet
+n'en sait rien et n'a pas à en savoir.
+
+## Installation
+
+```bash
+composer require arnaudmoncondhuy/authorization
+```
+
+Aucune recette Flex : le bundle s'enregistre à la main dans `config/bundles.php`.
+
+```php
+return [
+    // …
+    ArnaudMoncondhuy\Authorization\AuthorizationBundle::class => ['all' => true],
+];
+```
+
+## Prise en main
+
+### 1. Déclarer les droits, une énumération par contexte métier
+
+```php
+namespace App\Domain\Invoice;
+
+use ArnaudMoncondhuy\Authorization\Permission;
+
+enum InvoicePermission: string implements Permission
+{
+    case View = 'invoice.view';
+    case Finalize = 'invoice.finalize';
+    case Backdate = 'invoice.backdate';
+
+    public function id(): string
+    {
+        return $this->value;
+    }
+}
+```
+
+**Préfixez l'identité par son contexte.** Deux contextes qui choisiraient `view` désigneraient
+le même droit, et le partageraient — le paquet refuse de compiler dans ce cas, mais autant ne
+pas s'y exposer.
+
+**L'identité est stable une fois écrite.** C'est elle qu'un compte se voit accorder, donc elle
+survit en base à la classe qui la déclare : la renommer sans reprendre les droits déjà
+accordés les révoque en silence.
+
+### 2. Écrire le cas d'usage
+
+Voir l'exemple en tête. Trois règles de forme :
+
+- `#[RequiresPermission]` au niveau **classe**, autant de fois qu'il exige de droits ;
+- une seule méthode publique, `__invoke()` ;
+- `$this->access->require(…)` **en tête**, avant toute lecture et toute écriture.
+
+Le troisième point n'est pas cosmétique : un refus qui arrive après une lecture a déjà laissé
+fuir ce qu'il refusait.
+
+### 3. Écrire le voter — c'est votre part
+
+Le paquet transforme chaque droit en attribut soumis au contrôle d'accès de Symfony. À vous de
+dire qui l'obtient.
+
+```php
+namespace App\Security;
+
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+use Symfony\Component\Security\Core\Authorization\Voter\Voter;
+
+final class PermissionVoter extends Voter
+{
+    public function __construct(private readonly GrantRepository $grants)
+    {
+    }
+
+    protected function supports(string $attribute, mixed $subject): bool
+    {
+        return str_contains($attribute, '.');
+    }
+
+    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
+    {
+        $user = $token->getUser();
+
+        return $user instanceof User && $this->grants->grants($user, $attribute);
+    }
+}
+```
+
+`supports()` est le seul endroit délicat : il doit reconnaître vos identités **et rien
+d'autre**, sans quoi le voter se prononcera sur des attributs qui ne le regardent pas
+(`ROLE_USER`, `IS_AUTHENTICATED_FULLY`…). Une convention de préfixe explicite vaut mieux que le
+`str_contains` ci-dessus.
+
+### 4. Lister les droits pour les accorder
+
+```php
+final class RightsController
+{
+    public function __invoke(PermissionCatalog $catalog): Response
+    {
+        // Tous les droits que le code exige, une seule fois chacun, triés par identité.
+        $catalog->ids();
+
+        // Un droit stocké que plus aucun cas d'usage n'exige : une case devenue sans effet.
+        $catalog->isRequired('invoice.renamed');
+    }
+}
+```
+
+L'inventaire vient des mêmes déclarations que le contrôle : un droit ajouté au code ne peut
+pas manquer à la liste, et la liste ne peut pas proposer un droit que rien n'exige.
+
+### 5. Brancher le contrôle qui lit les corps de méthode
+
+```php
+use ArnaudMoncondhuy\Authorization\Testing\PermissionUsage;
+
+final class PermissionUsageTest extends TestCase
+{
+    public function testNoUseCaseBreaksItsContract(): void
+    {
+        self::assertSame([], PermissionUsage::violationsUnder(__DIR__.'/../src', 'App\\'));
+    }
+}
+```
+
+Il vérifie les deux sens : un droit **déclaré et jamais réclamé** fait apparaître une case que
+rien n'applique ; un droit **réclamé et jamais déclaré** n'entre dans aucun inventaire, ne peut
+être accordé à personne, et ferme le verbe pour tout le monde — administrateur compris.
+
+**Ses limites, écrites plutôt que tues :** il ne voit pas un droit exigé par une valeur
+calculée plutôt que par son cas écrit en toutes lettres, ni une énumération importée sous un
+autre nom.
+
+## Ce qui arrive en cas de refus
+
+`Authorizer::require()` lève `MissingPermission`, une exception du **métier** — un cas d'usage
+se joue aussi hors HTTP. Elle porte le droit manquant, pour qu'une surface puisse dire lequel.
+
+En présence de `symfony/http-kernel`, le paquet enregistre un écouteur qui la traduit en 403.
+Pour la traduire autrement — une erreur nommée pour un outil, un message pour une console —
+attrapez-la vous-même :
+
+```php
+try {
+    ($this->finalizeInvoice)($number);
+} catch (MissingPermission $refusal) {
+    return new ToolError(\sprintf('Droit manquant : %s', $refusal->permission->id()));
+}
+```
+
+## Dépendances
+
+| Composant | Pourquoi |
+|---|---|
+| `symfony/dependency-injection` | les trois passes, et la classe de bundle |
+| `symfony/config` | le chargement de la configuration du bundle |
+| `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
+| `symfony/event-dispatcher` | l'écouteur qui traduit un refus |
+| `symfony/http-kernel` | *suggéré* — sans lui, l'écouteur n'est pas enregistré |
+
+Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,
+`MissingPermission`, `PermissionCatalog` — est du PHP nu, sans une seule dépendance. C'est ce
+qui permet de le citer depuis un domaine pur. La routine qualité le vérifie à chaque
+exécution, imports et noms qualifiés compris.
+
+## Ce qui reste au projet
+
+Le paquet livre le mécanisme, jamais les garanties d'ensemble. Ce qui suit ne peut pas voyager
+et vous appartient :
+
+- **empêcher une surface d'atteindre la base sans passer par un cas d'usage** — c'est une
+  affaire de couches d'architecture, décrites par projet ;
+- **couper la résolution implicite d'entités depuis les arguments de contrôleur**
+  (`doctrine.orm.controller_resolver.enabled: false`), qui charge une table sans qu'aucun droit
+  ne soit réclamé ;
+- **surveiller `autoconfigure: false`**, seule façon de soustraire un service au tag posé par
+  le bundle, donc aux trois contrôles.
+
+## Version
+
+`0.x` : aucune promesse de compatibilité. La surface publique peut bouger d'une version mineure
+à l'autre tant que `1.0` n'est pas sorti.
+
+## Licence
+
+MIT.
