@@ -1,0 +1,12 @@
+# Dépendances installées par Composer. Un paquet ne fige pas les siennes : c'est
+# l'application qui l'installe qui arbitre les versions.
+/vendor/
+/composer.lock
+
+# Binaire téléchargé par qa/install-gitleaks.sh.
+/qa/bin/
+
+# Caches des outils qualité.
+/var/
+/.php-cs-fixer.cache
+/.phpunit.cache/
