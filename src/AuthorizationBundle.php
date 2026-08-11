@@ -8,6 +8,7 @@ use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckOnlyUseCasesDeclareP
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckUseCasesDeclarePermissionsPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RegisterPermissionCatalogPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\Tag;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Kernel\AbstractBundle;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -54,6 +55,12 @@ final class AuthorizationBundle extends AbstractBundle
 
         if (isset($bundles['SecurityBundle'])) {
             $configurator->import('../config/security.php');
+
+            // Les deux commandes interrogent le contrôle d'accès : sans pare-feu, elles
+            // n'auraient rien à examiner.
+            if (class_exists(Command::class)) {
+                $configurator->import('../config/console.php');
+            }
         }
 
         if (class_exists(ExceptionEvent::class)) {

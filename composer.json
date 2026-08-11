@@ -3,7 +3,13 @@
     "description": "Un droit se déclare une fois, sur le verbe métier. Le conteneur refuse de compiler sinon, et l'inventaire des droits se dérive du code.",
     "type": "symfony-bundle",
     "license": "MIT",
-    "keywords": ["symfony", "bundle", "authorization", "permission", "compiler-pass"],
+    "keywords": [
+        "symfony",
+        "bundle",
+        "authorization",
+        "permission",
+        "compiler-pass"
+    ],
     "authors": [
         {
             "name": "Arnaud Moncondhuy",
@@ -28,12 +34,14 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "phpunit/phpunit": "^13.3",
         "rector/rector": "^2.6",
+        "symfony/console": "^8.1",
         "symfony/framework-bundle": "^8.1",
         "symfony/http-kernel": "^8.1",
         "symfony/runtime": "^8.1",
         "symfony/security-bundle": "^8.1"
     },
     "suggest": {
+        "symfony/console": "Pour les commandes authorization:permissions et authorization:doctor.",
         "symfony/http-kernel": "Pour traduire un refus en réponse HTTP 403 sans écrire l'écouteur soi-même."
     },
     "autoload": {
