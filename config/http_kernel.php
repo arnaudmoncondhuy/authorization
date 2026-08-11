@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+
+/*
+ * Importé seulement là où symfony/http-kernel est installé — le paquet ne l'exige pas.
+ *
+ * Le tag est posé en toutes lettres plutôt que par #[AsEventListener] : l'attribut n'est lu
+ * que sur les services qu'une application autoconfigure, et celui-ci est déclaré ici.
+ */
+return static function (ContainerConfigurator $container): void {
+    $container->services()
+        ->set(MissingPermissionListener::class)
+            ->tag('kernel.event_listener', ['event' => 'kernel.exception'])
+    ;
+};
