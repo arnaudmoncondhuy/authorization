@@ -39,9 +39,17 @@ poste de qui a écrit la faute.
 | Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
 | Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre |
 
-Une quatrième règle ne peut pas s'y tenir : rapprocher ce que l'attribut **déclare** de ce que
-le corps **réclame** demande de lire un corps de méthode, ce qu'aucune passe de compilation ne
-fait. Elle est livrée comme outil de test — voir plus bas.
+**Ces trois règles ne jugent que ce qui implémente `UseCase`.** Une classe qui oublie
+l'interface leur échappe entièrement, tout en pouvant réclamer des droits. Le langage ne sait
+pas l'empêcher ; `PermissionUsage` le rattrape en test, et c'est écrit ici plutôt que tu, parce
+que c'est la seule brèche du dispositif.
+
+Deux contrôles ne peuvent pas arrêter la compilation et se jouent donc ailleurs :
+
+- rapprocher ce que l'attribut **déclare** de ce que le corps **réclame** demande de lire un
+  corps de méthode — `PermissionUsage`, en test ;
+- savoir si un droit trouve **quelqu'un pour en juger** demande d'interroger les voters
+  installés — `authorization:doctor`, en ligne de commande.
 
 ## Ce que le paquet ne fait pas
 
@@ -183,9 +191,144 @@ Il vérifie les deux sens : un droit **déclaré et jamais réclamé** fait appa
 rien n'applique ; un droit **réclamé et jamais déclaré** n'entre dans aucun inventaire, ne peut
 être accordé à personne, et ferme le verbe pour tout le monde — administrateur compris.
 
+Il attrape aussi la brèche signalée plus haut : **une classe qui réclame un droit sans être un
+cas d'usage**. Les trois refus de compilation ne la voient pas, puisqu'elle n'implémente pas
+`UseCase`.
+
 **Ses limites, écrites plutôt que tues :** il ne voit pas un droit exigé par une valeur
 calculée plutôt que par son cas écrit en toutes lettres, ni une énumération importée sous un
 autre nom.
+
+### 6. Examiner l'installation
+
+```bash
+php bin/console authorization:permissions   # ce que le code exige
+php bin/console authorization:doctor        # ce qui manque pour que ça marche
+```
+
+Le docteur cherche ce qu'aucun autre contrôle ne voit : **un droit qu'aucun voter ne prend en
+charge**. Le code l'exige, l'inventaire le propose, l'écran d'attribution permet de le cocher —
+et il est refusé à tout le monde, administrateur compris, sans qu'aucune erreur ne soit levée.
+
+Il rend un code de sortie, donc une routine qualité peut s'appuyer dessus. Sur une application
+sans droit déclaré, il dit qu'il n'y a rien à examiner plutôt que de rendre un vert franc.
+
+---
+
+## Recettes
+
+Ce que le paquet ne fait pas pour vous, et comment on s'y prend.
+
+### Une surface sans utilisateur — console, worker, tâche planifiée
+
+Un cas d'usage réclame ses droits à l'appelant courant. Une commande n'en a pas : **tous ses
+verbes sont refusés** tant qu'on ne lui en donne pas un.
+
+```php
+final class ImportCatalogCommand extends Command
+{
+    public function __construct(
+        private readonly SystemIdentity $system,
+        private readonly ImportCatalogUseCase $importCatalog,
+    ) {
+        parent::__construct();
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $this->system->run($this->identity(), fn () => ($this->importCatalog)());
+
+        return Command::SUCCESS;
+    }
+
+    private function identity(): TokenInterface
+    {
+        // Un rôle qu'aucun compte humain ne porte, et qu'un voter reconnaît.
+        $service = new InMemoryUser('import', null, ['ROLE_SERVICE']);
+
+        return new UsernamePasswordToken($service, 'console', $service->getRoles());
+    }
+}
+```
+
+`SystemIdentity` apporte **la portée, jamais l'identité** : le paquet ne sait pas qui vous
+autorisez. Le jeton précédent est rendu quoi qu'il arrive, y compris si le traitement lève —
+sans quoi une commande qui échoue laisserait ses droits au traitement suivant du même
+processus.
+
+Et donner une identité n'accorde rien : c'est toujours un voter qui juge. **Taillez le rôle de
+service aussi étroitement qu'un rôle humain** — un rôle qui accorde tout est une porte ouverte,
+pas une commodité.
+
+### Mettre en page un refus
+
+Le paquet remplace `MissingPermission` par une `AccessDeniedHttpException` : en production,
+Symfony rend alors votre gabarit `error403.html.twig`, et il n'y a rien à écrire.
+
+Pour rendre une réponse à vous — une page qui nomme le droit manquant, une charge JSON pour une
+API — posez votre écouteur **devant** celui du paquet, qui est à la priorité par défaut :
+
+```php
+#[AsEventListener(event: KernelEvents::EXCEPTION, priority: 100)]
+final readonly class RefusalListener
+{
+    public function __invoke(ExceptionEvent $event): void
+    {
+        if (!$event->isMainRequest() || !$event->getThrowable() instanceof MissingPermission) {
+            return;
+        }
+
+        $event->setResponse(/* votre réponse */);
+    }
+}
+```
+
+Poser une **réponse** plutôt qu'une exception arrête la propagation : le nôtre ne verra rien.
+
+### Des libellés lisibles
+
+`Permission` ne porte qu'une identité — c'est ce qui garde le contrat citable depuis un domaine
+pur. Un écran d'attribution a besoin de mots, et la convention qui marche est une clé de
+traduction dérivée de l'identité :
+
+```twig
+{{ ('permission.' ~ permission.id)|trans }}
+```
+
+```yaml
+# translations/messages.fr.yaml
+permission:
+    invoice.finalize: Finaliser une facture
+```
+
+Une clé absente s'affiche telle quelle : on voit immédiatement laquelle manque.
+
+### Faire cohabiter deux modèles de droits
+
+Rien n'empêche que certains droits se décident par rôle et d'autres par groupe. Deux voters
+suffisent, à condition que **leurs `supports()` portent sur des identités disjointes** — sinon
+les deux se prononcent, et le premier refus l'emporte.
+
+Le paquet ne dit pas quel modèle gouverne quel droit : c'est une décision d'application. Elle
+s'écrit une fois, dans le domaine, et se lit des deux côtés — par les voters et par l'écran
+d'attribution :
+
+```php
+enum GrantModel
+{
+    case ByRole;
+    case ByGroup;
+
+    public static function of(string $permission): self
+    {
+        return str_starts_with($permission, 'invoice.') ? self::ByGroup : self::ByRole;
+    }
+}
+```
+
+Sans cette répartition partagée, l'écran laisse cocher un droit sur un rôle qui ne l'accordera
+jamais. `authorization:doctor` ne voit pas cette faute-là : le droit a bien un juge, c'est
+seulement qu'on l'accorde au mauvais endroit.
 
 ## Ce qui arrive en cas de refus
 
@@ -213,6 +356,7 @@ try {
 | `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
 | `symfony/event-dispatcher` | l'écouteur qui traduit un refus |
 | `symfony/http-kernel` | *suggéré* — sans lui, l'écouteur n'est pas enregistré |
+| `symfony/console` | *suggéré* — sans lui, les deux commandes n'existent pas |
 
 Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,
 `MissingPermission`, `PermissionCatalog` — est du PHP nu, sans une seule dépendance. C'est ce
