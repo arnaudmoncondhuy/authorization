@@ -72,7 +72,7 @@ final class PermissionUsage
                 continue;
             }
 
-            $body = self::bodyOf($reflection->getMethod('__invoke'));
+            $body = self::executableCode(self::bodyOf($reflection->getMethod('__invoke')));
 
             // Un droit choisi par une valeur ne peut être rapproché de rien. Le dire plutôt
             // que d'accuser la classe de ne jamais réclamer ce qu'elle réclame peut-être :
@@ -132,7 +132,7 @@ final class PermissionUsage
         }
 
         $file = $reflection->getFileName();
-        $source = false !== $file ? (string) file_get_contents($file) : '';
+        $source = false !== $file ? self::executableCode((string) file_get_contents($file)) : '';
 
         if ([] === self::demandedIn($source)) {
             return [];
@@ -152,6 +152,31 @@ final class PermissionUsage
         preg_match_all('/->require\(\s*([A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*)\s*\)/', $body, $matches);
 
         return array_values(array_unique($matches[1]));
+    }
+
+    /**
+     * Le code qui s'exécute, débarrassé de ce qui ne s'exécute pas.
+     *
+     * Sans cela, une garde **mise en commentaire** serait comptée comme une réclamation :
+     * le texte cherché y figure en toutes lettres, et c'est le geste le plus banal d'un
+     * débogage. Le verbe tournerait alors sans arbitrage pendant que ce contrôle certifie
+     * l'inverse — la faute la plus dangereuse qu'il puisse commettre, puisqu'elle ouvre.
+     *
+     * Les chaînes littérales et les heredocs partent pour la même raison.
+     */
+    private static function executableCode(string $source): string
+    {
+        $code = '';
+
+        foreach (\PhpToken::tokenize('<?php '.$source) as $token) {
+            if ($token->is([\T_COMMENT, \T_DOC_COMMENT, \T_CONSTANT_ENCAPSED_STRING, \T_ENCAPSED_AND_WHITESPACE, \T_INLINE_HTML])) {
+                continue;
+            }
+
+            $code .= $token->text;
+        }
+
+        return $code;
     }
 
     /**

@@ -37,7 +37,7 @@ poste de qui a écrit la faute.
 |---|---|
 | Tout cas d'usage déclare au moins un droit | un verbe qui s'exécute sans arbitrage, et qu'on ne peut accorder à personne |
 | Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
-| Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre |
+| Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre — la collision se juge sur la valeur, donc entre deux cas d'une même énumération autant qu'entre deux énumérations |
 
 **Ces trois règles ne jugent que ce qui implémente `UseCase`.** Une classe qui oublie
 l'interface leur échappe entièrement, tout en pouvant réclamer des droits. Le langage ne sait
@@ -228,6 +228,10 @@ Ce n'est pas une négligence : c'est ce qui rend le contrôle sûr. Chercher le 
 plutôt que l'appel laisserait passer un `can()` qui teste sans s'y tenir, puisque les deux
 s'écrivent avec les mêmes caractères à un mot près. Écrivez donc le cas en clair — c'est aussi
 ce qui rend le corps lisible.
+
+Le corps est lu **débarrassé de ce qui ne s'exécute pas** : commentaires, chaînes littérales,
+heredocs. Une garde mise en commentaire le temps d'un débogage n'est donc pas une garde, et
+elle est signalée comme telle — sans quoi le contrôle ouvrirait en croyant fermer.
 
 Un droit choisi par une **valeur** est signalé pour ce qu'il est, et non accusé de n'être
 jamais réclamé : le geste est bien gouverné, c'est le rapprochement qui devient impossible.

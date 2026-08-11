@@ -11,6 +11,7 @@ use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\InvoicePermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\StockPermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\CollidingUseCase;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\DoublingUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Stock\AdjustStockUseCase;
@@ -67,6 +68,22 @@ final class RegisterPermissionCatalogPassTest extends TestCase
 
         $this->expectException(LogicException::class);
         $this->expectExceptionMessageMatches('/invoice\.view/');
+
+        new RegisterPermissionCatalogPass()->process($container);
+    }
+
+    /**
+     * La collision se juge sur la valeur et non sur la classe : deux cas d'une même
+     * énumération qui rendent la même identité désignent deux droits distincts sous un seul
+     * nom. Comparer les classes les laisserait passer, l'un écraserait l'autre dans
+     * l'inventaire, et accorder ce nom ouvrirait les deux verbes.
+     */
+    public function testItRefusesTwoCasesOfOneEnumerationSharingAnIdentity(): void
+    {
+        $container = $this->containerWith(DoublingUseCase::class);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageMatches('/fixture\.doubled/');
 
         new RegisterPermissionCatalogPass()->process($container);
     }

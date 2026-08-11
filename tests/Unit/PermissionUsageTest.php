@@ -50,6 +50,7 @@ final class PermissionUsageTest extends TestCase
     public function testTheFixturesYieldExactlyTheExpectedFaults(): void
     {
         self::assertSame([
+            'CommentedGuardUseCase déclare fixture.invoice.create sans jamais le réclamer',
             'ComputesItsPermissionUseCase réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses déclarations',
             'DeclaresWithoutDemandingUseCase déclare fixture.invoice.create sans jamais le réclamer',
             'DeclaringController déclare un droit sans être un cas d\'usage',
@@ -136,6 +137,21 @@ final class PermissionUsageTest extends TestCase
     {
         self::assertContains(
             'DeclaringController déclare un droit sans être un cas d\'usage',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
+     * La faute la plus dangereuse qu'un contrôle puisse commettre : ouvrir en croyant fermer.
+     *
+     * Une garde mise en commentaire laisse le texte cherché dans le fichier. Une lecture brute
+     * du corps certifierait donc que le droit est réclamé pendant que le verbe s'exécute sans
+     * aucun arbitrage — et le geste est celui de n'importe quel débogage.
+     */
+    public function testAGuardLeftInACommentIsNotAGuard(): void
+    {
+        self::assertContains(
+            'CommentedGuardUseCase déclare fixture.invoice.create sans jamais le réclamer',
             self::violationsInFixtures(),
         );
     }

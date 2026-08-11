@@ -20,9 +20,12 @@ use Symfony\Component\DependencyInjection\Exception\LogicException;
  * suffit à la rafraîchir, et il l'est à chaque déploiement.
  *
  * Deux droits distincts qui porteraient la même identité arrêtent la compilation. C'est le
- * seul rempart contre une collision entre contextes, et ce qu'elle coûterait est lourd : deux
- * domaines partageraient un droit sans que rien ne le dise, et l'accorder pour l'un
- * l'accorderait pour l'autre.
+ * seul rempart contre une collision, et ce qu'elle coûterait est lourd : deux verbes
+ * partageraient un droit sans que rien ne le dise, et l'accorder pour l'un l'accorderait pour
+ * l'autre.
+ *
+ * La collision se juge sur la valeur, pas sur la classe : elle guette autant entre deux
+ * énumérations qu'entre deux cas d'une seule.
  */
 final readonly class RegisterPermissionCatalogPass implements CompilerPassInterface
 {
@@ -44,7 +47,11 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
                 $permission = $attribute->newInstance()->permission;
                 $id = $permission->id();
 
-                if (isset($collected[$id]) && $collected[$id]::class !== $permission::class) {
+                // Comparés par valeur et non par classe : deux cas d'une même énumération qui
+                // rendraient la même identité désigneraient deux droits distincts sous un seul
+                // nom, et l'un écraserait l'autre dans l'inventaire — accorder ce nom
+                // ouvrirait alors les deux verbes.
+                if (isset($collected[$id]) && $collected[$id] != $permission) {
                     $collisions[$id] = \sprintf('%s partagée par %s et %s', $id, self::name($collected[$id]), self::name($permission));
                 }
 
