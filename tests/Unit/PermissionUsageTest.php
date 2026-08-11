@@ -50,12 +50,32 @@ final class PermissionUsageTest extends TestCase
     public function testTheFixturesYieldExactlyTheExpectedFaults(): void
     {
         self::assertSame([
+            'ComputesItsPermissionUseCase réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses déclarations',
             'DeclaresWithoutDemandingUseCase déclare fixture.invoice.create sans jamais le réclamer',
             'DeclaringController déclare un droit sans être un cas d\'usage',
             'DemandsUndeclaredUseCase réclame InvoicePermission::Create sans l\'avoir déclaré',
             'RequiringController réclame un droit sans être un cas d\'usage',
             'TestsWithoutRequiringUseCase déclare fixture.invoice.view sans jamais le réclamer',
         ], self::violationsInFixtures());
+    }
+
+    /**
+     * Un droit choisi par une valeur est bien réclamé — le geste est gouverné — mais rien ne
+     * peut le rapprocher de ce que l'attribut déclare. Le dire ainsi plutôt que d'accuser la
+     * classe de ne jamais réclamer ce qu'elle déclare : l'accusation serait fausse.
+     */
+    public function testAComputedPermissionIsNamedForWhatItIs(): void
+    {
+        $violations = self::violationsInFixtures();
+
+        self::assertContains(
+            'ComputesItsPermissionUseCase réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses déclarations',
+            $violations,
+        );
+        self::assertNotContains(
+            'ComputesItsPermissionUseCase déclare fixture.invoice.view sans jamais le réclamer',
+            $violations,
+        );
     }
 
     /**

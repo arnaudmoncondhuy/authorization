@@ -73,6 +73,15 @@ final class PermissionUsage
             }
 
             $body = self::bodyOf($reflection->getMethod('__invoke'));
+
+            // Un droit choisi par une valeur ne peut être rapproché de rien. Le dire plutôt
+            // que d'accuser la classe de ne jamais réclamer ce qu'elle réclame peut-être :
+            // l'accusation serait fausse, et elle enverrait chercher au mauvais endroit.
+            if (1 === preg_match('/->require\(\s*\$/', $body)) {
+                $faults[] = $reflection->getShortName().' réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses déclarations';
+                continue;
+            }
+
             $demanded = self::demandedIn($body);
             $written = [];
 

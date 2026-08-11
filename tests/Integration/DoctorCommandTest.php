@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Integration;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\OverlappingPermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
@@ -56,6 +57,41 @@ final class DoctorCommandTest extends TestCase
     }
 
     /**
+     * L'autre faute qu'il est seul à voir, et elle élargit les droits au lieu de les fermer :
+     * sous la stratégie « affirmative » de Symfony, il suffit qu'un des deux voters accorde.
+     */
+    public function testItReportsAPermissionJudgedByTwoVoters(): void
+    {
+        $tester = $this->diagnose(
+            ViewInvoiceUseCase::class,
+            InvoiceBook::class,
+            FixturePermissionVoter::class,
+            OverlappingPermissionVoter::class,
+        );
+
+        self::assertStringContainsString('plusieurs voters', $tester->getDisplay());
+        self::assertStringContainsString(OverlappingPermissionVoter::class, $tester->getDisplay());
+    }
+
+    /**
+     * Un recouvrement n'est pas toujours une faute — un voter qui ouvre tout à une poignée
+     * d'administrateurs en est un usage légitime. Il se signale donc par défaut, et n'échoue
+     * que sur demande.
+     */
+    public function testAnOverlapOnlyFailsWhenAsked(): void
+    {
+        $services = [
+            ViewInvoiceUseCase::class,
+            InvoiceBook::class,
+            FixturePermissionVoter::class,
+            OverlappingPermissionVoter::class,
+        ];
+
+        self::assertSame(Command::SUCCESS, $this->diagnose(...$services)->getStatusCode());
+        self::assertSame(Command::FAILURE, $this->diagnoseStrictly(...$services)->getStatusCode());
+    }
+
+    /**
      * Sur une application sans droit déclaré, il n'y a rien à examiner. Le dire plutôt que de
      * rendre un vert franc, qui laisserait croire qu'une installation a été vérifiée.
      */
@@ -83,11 +119,26 @@ final class DoctorCommandTest extends TestCase
     /** @param class-string ...$services */
     private function diagnose(string ...$services): CommandTester
     {
+        return $this->examine([], ...$services);
+    }
+
+    /** @param class-string ...$services */
+    private function diagnoseStrictly(string ...$services): CommandTester
+    {
+        return $this->examine(['--strict' => true], ...$services);
+    }
+
+    /**
+     * @param array<string, bool> $options
+     * @param class-string        ...$services
+     */
+    private function examine(array $options, string ...$services): CommandTester
+    {
         $command = $this->boot(...$services)->get(DoctorCommand::class);
         self::assertInstanceOf(DoctorCommand::class, $command);
 
         $tester = new CommandTester($command);
-        $tester->execute([]);
+        $tester->execute($options);
 
         return $tester;
     }

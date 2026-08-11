@@ -229,8 +229,13 @@ plutôt que l'appel laisserait passer un `can()` qui teste sans s'y tenir, puisq
 s'écrivent avec les mêmes caractères à un mot près. Écrivez donc le cas en clair — c'est aussi
 ce qui rend le corps lisible.
 
+Un droit choisi par une **valeur** est signalé pour ce qu'il est, et non accusé de n'être
+jamais réclamé : le geste est bien gouverné, c'est le rapprochement qui devient impossible.
+
 **Ses autres limites, écrites plutôt que tues :** il ne voit pas une énumération importée sous
-un autre nom, ni un droit choisi par une valeur calculée.
+un autre nom, et **il ne vérifie pas que `require()` vient avant la première lecture**. Un
+refus posé après coup a déjà laissé fuir ce qu'il refusait, et aucune lecture de texte ne sait
+distinguer une lecture d'un calcul — c'est une règle qui reste à votre charge.
 
 ### 6. Examiner l'installation
 
@@ -246,11 +251,26 @@ et il est refusé à tout le monde, administrateur compris, sans qu'aucune erreu
 Il rend un code de sortie, donc une routine qualité peut s'appuyer dessus. Sur une application
 sans droit déclaré, il dit qu'il n'y a rien à examiner plutôt que de rendre un vert franc.
 
+Il **compte** les juges plutôt que de s'arrêter au premier : un droit jugé par plusieurs voters
+est signalé, parce que sous la stratégie `affirmative` le recouvrement élargit les droits au
+lieu de les restreindre. Ce n'est pas toujours une faute, d'où un signalement par défaut et
+`--strict` pour en faire un échec.
+
+**Il exécute les voters pour de vrai.** Si l'un des vôtres lit la base, la commande réclame une
+base et un schéma à jour — c'est ce qui rend sa réponse fiable, et ce qui la fait échouer
+bruyamment avant une migration.
+
 **Sa mesure est indirecte, et il faut le savoir.** Il conclut qu'un droit a un juge si un voter
 ne s'abstient pas dessus, interrogé sans utilisateur connecté. Sur un voter bâti sur la classe
 abstraite de Symfony, c'est exact — l'abstention y est la réponse quand `supports()` refuse.
 Un voter qui s'abstient pour une autre raison, l'absence d'utilisateur par exemple, serait
 compté absent à tort.
+
+**Ce qu'il ne voit pas, et que rien ne voit :** une identité **renommée**. Le code compile, les
+tests passent, le docteur est vert — et tous ceux qui détenaient l'ancienne l'ont perdue en
+silence. C'est la seule chaîne du dispositif qui survive en base à la classe qui la déclare, et
+la comparer à ce qui est accordé est un contrôle que seule votre application peut faire, avec
+`PermissionCatalog::isRequired()`.
 
 Ce qu'il ne voit pas non plus : un droit jugé par le mauvais modèle. Si l'écran laisse le
 cocher sur un rôle quand seul un groupe l'accorde, le droit a bien un juge — il est seulement
@@ -396,8 +416,26 @@ sûr est qu'il refuse, plutôt que de remettre les droits à leur état d'usine.
 ### Faire cohabiter deux modèles de droits
 
 Rien n'empêche que certains droits se décident par rôle et d'autres par groupe. Deux voters
-suffisent, à condition que **leurs `supports()` portent sur des identités disjointes** — sinon
-les deux se prononcent, et le premier refus l'emporte.
+suffisent, à condition que **leurs `supports()` portent sur des identités disjointes**.
+
+**Cette condition n'est pas une propreté, c'est une sécurité.** La stratégie de décision de
+Symfony est `affirmative` par défaut : dès qu'**un** voter accorde, l'accès est accordé, et les
+refus des autres ne sont pas consultés. Deux voters qui se recouvrent n'aboutissent donc pas au
+plus strict des deux mais au plus permissif — un compte sans le moindre rôle obtient le droit
+si le voter de trop l'accorde.
+
+Vérifiez la vôtre, elle ne vient pas de ce paquet :
+
+```yaml
+# config/packages/security.yaml
+security:
+    access_decision_manager:
+        strategy: affirmative   # le défaut, écrit en toutes lettres plutôt que subi
+```
+
+Le moyen sûr n'est pas de relire ses `supports()` de temps en temps, c'est de les **dériver
+tous d'une même répartition** — celle qui suit. Deux voters qui lisent la même source ne
+peuvent pas se recouvrir.
 
 Le paquet ne dit pas quel modèle gouverne quel droit : c'est une décision d'application. Elle
 s'écrit une fois, dans le domaine, et se lit des deux côtés — par les voters et par l'écran
