@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\Authorization\Testing;
 
+use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\RequiresPermission;
 use ArnaudMoncondhuy\Authorization\UseCase;
@@ -23,15 +24,20 @@ use ArnaudMoncondhuy\Authorization\UseCase;
  * Elle rend une liste et n'assertionne pas : ce paquet ne dépend d'aucun cadre de test, et
  * n'impose pas le sien.
  *
- * La lecture se borne au corps de `__invoke()`, et cherche l'appel et non le seul nom du
- * droit. Lire le fichier entier ne prouverait rien — la ligne de déclaration porte déjà le
- * texte cherché ; chercher le nom seul n'en prouve pas beaucoup plus, puisque le tester sans
- * agir dessus s'écrit avec les mêmes caractères à un mot près.
+ * Sur un cas d'usage, la lecture se borne au corps de `__invoke()`, et cherche l'appel et non
+ * le seul nom du droit. Lire le fichier entier ne prouverait rien — la ligne de déclaration
+ * porte déjà le texte cherché ; chercher le nom seul n'en prouve pas beaucoup plus, puisque le
+ * tester sans agir dessus s'écrit avec les mêmes caractères à un mot près.
  *
  * Les deux sens sont vérifiés. Un droit déclaré et jamais exigé fait apparaître une case que
  * rien n'applique ; un droit exigé et jamais déclaré n'entre dans aucun inventaire, ne peut
  * donc être accordé à personne, et ferme le verbe pour tout le monde — administrateur
  * compris, sans recours depuis l'application.
+ *
+ * Sur tout le reste, la lecture porte sur le fichier entier, et cherche une seule chose : un
+ * droit réclamé hors d'un cas d'usage. C'est ce qui rattrape la faiblesse des trois contrôles
+ * de compilation, qui ne jugent que ce qui implémente {@see UseCase} — une classe qui oublie
+ * l'interface leur échappe tout en portant du métier gouverné par rien.
  *
  * Ce qu'elle ne voit pas : un droit exigé par une valeur calculée plutôt que par son cas
  * écrit en toutes lettres, et une énumération importée sous un autre nom.
@@ -52,14 +58,12 @@ final class PermissionUsage
             $declared = $reflection->getAttributes(RequiresPermission::class);
             $isUseCase = !$reflection->isInterface() && $reflection->implementsInterface(UseCase::class);
 
-            // Le conteneur ne voit que les services : une entité, un message ou un objet du
-            // domaine porteraient l'attribut sans qu'aucune passe ne s'en aperçoive.
-            if ([] !== $declared && !$isUseCase) {
-                $faults[] = $reflection->getShortName().' déclare un droit sans être un cas d\'usage';
+            if (!$isUseCase) {
+                $faults = array_merge($faults, self::faultsOutsideAUseCase($reflection, [] !== $declared));
                 continue;
             }
 
-            if (!$isUseCase || [] === $declared) {
+            if ([] === $declared) {
                 continue;
             }
 
@@ -89,6 +93,43 @@ final class PermissionUsage
         sort($faults);
 
         return $faults;
+    }
+
+    /**
+     * Ce qu'une classe qui n'est pas un cas d'usage n'a pas le droit de faire.
+     *
+     * Deux fautes, et la seconde répare une faiblesse de tout le dispositif : les trois
+     * contrôles de compilation ne jugent que ce qui implémente {@see UseCase}. Une classe de
+     * la couche des cas d'usage qui oublierait cette interface échapperait à tout, tout en
+     * réclamant des droits — donc en portant du métier gouverné par rien.
+     *
+     * Une implémentation du contrat est laissée tranquille : elle porte `require()`, elle ne
+     * l'usurpe pas.
+     *
+     * @param \ReflectionClass<object> $reflection
+     *
+     * @return list<string>
+     */
+    private static function faultsOutsideAUseCase(\ReflectionClass $reflection, bool $declares): array
+    {
+        // Le conteneur ne voit que les services : une entité, un message ou un objet du
+        // domaine porteraient l'attribut sans qu'aucune passe ne s'en aperçoive.
+        if ($declares) {
+            return [$reflection->getShortName().' déclare un droit sans être un cas d\'usage'];
+        }
+
+        if ($reflection->implementsInterface(Authorizer::class)) {
+            return [];
+        }
+
+        $file = $reflection->getFileName();
+        $source = false !== $file ? (string) file_get_contents($file) : '';
+
+        if ([] === self::demandedIn($source)) {
+            return [];
+        }
+
+        return [$reflection->getShortName().' réclame un droit sans être un cas d\'usage'];
     }
 
     /**

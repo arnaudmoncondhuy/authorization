@@ -53,8 +53,35 @@ final class PermissionUsageTest extends TestCase
             'DeclaresWithoutDemandingUseCase déclare fixture.invoice.create sans jamais le réclamer',
             'DeclaringController déclare un droit sans être un cas d\'usage',
             'DemandsUndeclaredUseCase réclame InvoicePermission::Create sans l\'avoir déclaré',
+            'RequiringController réclame un droit sans être un cas d\'usage',
             'TestsWithoutRequiringUseCase déclare fixture.invoice.view sans jamais le réclamer',
         ], self::violationsInFixtures());
+    }
+
+    /**
+     * La faiblesse que ce contrôle répare : les trois refus de compilation ne jugent que ce
+     * qui implémente le marqueur. Une classe qui l'oublie tout en réclamant des droits leur
+     * échappe entièrement — son geste n'entre dans aucun inventaire et n'est gouverné par
+     * rien.
+     */
+    public function testItCatchesAPermissionDemandedOutsideAUseCase(): void
+    {
+        self::assertContains(
+            'RequiringController réclame un droit sans être un cas d\'usage',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
+     * Une implémentation du contrat porte `require()` : elle ne l'usurpe pas, et ne doit pas
+     * être confondue avec une surface qui contrôlerait à la place du verbe.
+     */
+    public function testAnAuthorizerIsNotMistakenForAnOffender(): void
+    {
+        self::assertNotContains(
+            'FixedAuthorizer réclame un droit sans être un cas d\'usage',
+            self::violationsInFixtures(),
+        );
     }
 
     /**
