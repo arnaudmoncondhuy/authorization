@@ -71,7 +71,11 @@ est la description exécutable.
   qu'une application importe dans son domaine.
 - **`DependencyInjection/`** — les trois passes et le nom du tag. Connaît
   `symfony/dependency-injection`, et rien d'autre.
-- **`Bridge/`** — les adaptateurs, nommés par le fournisseur qu'ils branchent.
+- **`Bridge/`** — les adaptateurs, nommés par le fournisseur qu'ils branchent. Une application
+  ferme ce dossier à ses surfaces : l'adaptateur y donne accès au contrôle d'accès du
+  framework, et un cas d'usage ne va jamais chercher qui est connecté.
+- **`Scope/`** — ce qu'une surface a le droit d'injecter. À part de `Bridge/` pour cette seule
+  raison : une application doit pouvoir l'ouvrir sans avoir à découper une couche.
 - **`Testing/`** — l'outil de vérification livré aux applications. Il rend une liste de
   violations et n'assertionne pas : il ne dépend d'aucun cadre de test, et voyage donc en
   `autoload`, jamais en `autoload-dev`.

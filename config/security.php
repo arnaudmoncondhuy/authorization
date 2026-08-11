@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
-use ArnaudMoncondhuy\Authorization\Bridge\SystemIdentity;
+use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;

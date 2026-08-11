@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 
-use ArnaudMoncondhuy\Authorization\Bridge\SystemIdentity;
+use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorage;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;

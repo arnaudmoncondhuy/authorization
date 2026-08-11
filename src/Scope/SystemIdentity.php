@@ -2,11 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ArnaudMoncondhuy\Authorization\Bridge;
+namespace ArnaudMoncondhuy\Authorization\Scope;
 
 use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
-use Symfony\Component\Security\Core\Authorization\Voter\Voter;
 
 /**
  * Fait tourner un traitement sous une identité que l'application se donne à elle-même.
@@ -25,7 +24,9 @@ use Symfony\Component\Security\Core\Authorization\Voter\Voter;
  * décider ce qu'un rôle de service obtient, et de le décider aussi étroitement qu'un rôle
  * humain — un rôle de service qui accorde tout est une porte ouverte, pas une commodité.
  *
- * @see Voter le modèle de décision reste celui de l'application
+ * Elle vit hors de `Bridge\`, et c'est ce qui la rend utilisable : une surface a le droit de
+ * l'injecter, là où l'adaptateur du contrôle d'accès et les passes de compilation doivent lui
+ * rester fermés. Une architecture qui clôt `Bridge\` d'un bloc n'a rien à découper.
  */
 final readonly class SystemIdentity
 {

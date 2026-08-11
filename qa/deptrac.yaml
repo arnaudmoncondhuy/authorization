@@ -45,6 +45,15 @@ deptrac:
         - type: classLike
           value: '^ArnaudMoncondhuy\\Authorization\\Bridge\\.+$'
 
+    # ── Scope : ce qu'une surface a le droit d'injecter ──────────────────────────────────
+    # À part de `Bridge\` parce que l'usage n'est pas le même : une application ferme
+    # `Bridge\` à ses surfaces — l'adaptateur y donne accès au contrôle d'accès du framework —
+    # et doit pouvoir ouvrir ceci sans avoir à découper une couche.
+    - name: Scope
+      collectors:
+        - type: classLike
+          value: '^ArnaudMoncondhuy\\Authorization\\Scope\\.+$'
+
     # ── Bundle : le point de montage ─────────────────────────────────────────────────────
     - name: Bundle
       collectors:
@@ -63,6 +72,9 @@ deptrac:
 
     Bridge:
       - Contract
+
+    # La portée n'a que faire du contrat : elle installe une identité, elle ne juge rien.
+    Scope: []
 
     # Le bundle pose le tag sur le contrat et enregistre les passes. Il ne connaît pas les
     # adaptateurs : ceux-ci sont déclarés en configuration, sous condition.

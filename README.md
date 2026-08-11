@@ -118,6 +118,17 @@ Voir l'exemple en tête. Trois règles de forme :
 Le troisième point n'est pas cosmétique : un refus qui arrive après une lecture a déjà laissé
 fuir ce qu'il refusait.
 
+Le contrat porte une seconde méthode, `can()`, qui **répond au lieu d'arrêter** :
+
+```php
+{% if access.can(constant('App\\Domain\\Invoice\\InvoicePermission::Finalize')) %}
+```
+
+Elle sert à une surface qui n'affiche que ce qui marchera — un bouton, une entrée de menu, un
+outil dans une liste. Elle ne remplace jamais `require()` : ce que la surface cache, le verbe
+doit continuer de le refuser, sinon la porte est ouverte à qui devine l'adresse. Un droit
+déclaré que le corps se contente de tester est d'ailleurs signalé comme jamais réclamé.
+
 ### 3. Écrire le voter — c'est votre part
 
 Le paquet transforme chaque droit en attribut soumis au contrôle d'accès de Symfony. À vous de
@@ -140,7 +151,7 @@ final class PermissionVoter extends Voter
         return str_contains($attribute, '.');
     }
 
-    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token): bool
+    protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token, ?Vote $vote = null): bool
     {
         $user = $token->getUser();
 
@@ -149,10 +160,17 @@ final class PermissionVoter extends Voter
 }
 ```
 
+Le cinquième paramètre, `?Vote $vote = null`, est celui de Symfony 8 : l'omettre fait échouer
+la compatibilité de signature.
+
 `supports()` est le seul endroit délicat : il doit reconnaître vos identités **et rien
 d'autre**, sans quoi le voter se prononcera sur des attributs qui ne le regardent pas
 (`ROLE_USER`, `IS_AUTHENTICATED_FULLY`…). Une convention de préfixe explicite vaut mieux que le
 `str_contains` ci-dessus.
+
+**Un voter qui s'abstient faute d'utilisateur ferme le verbe à toute surface sans session** —
+console, worker, tâche planifiée. Si vous en avez, préférez refuser explicitement plutôt que
+vous abstenir, et voyez la recette « Une surface sans utilisateur ».
 
 ### 4. Lister les droits pour les accorder
 
@@ -212,6 +230,16 @@ et il est refusé à tout le monde, administrateur compris, sans qu'aucune erreu
 
 Il rend un code de sortie, donc une routine qualité peut s'appuyer dessus. Sur une application
 sans droit déclaré, il dit qu'il n'y a rien à examiner plutôt que de rendre un vert franc.
+
+**Sa mesure est indirecte, et il faut le savoir.** Il conclut qu'un droit a un juge si un voter
+ne s'abstient pas dessus, interrogé sans utilisateur connecté. Sur un voter bâti sur la classe
+abstraite de Symfony, c'est exact — l'abstention y est la réponse quand `supports()` refuse.
+Un voter qui s'abstient pour une autre raison, l'absence d'utilisateur par exemple, serait
+compté absent à tort.
+
+Ce qu'il ne voit pas non plus : un droit jugé par le mauvais modèle. Si l'écran laisse le
+cocher sur un rôle quand seul un groupe l'accorde, le droit a bien un juge — il est seulement
+accordé au mauvais endroit.
 
 ---
 

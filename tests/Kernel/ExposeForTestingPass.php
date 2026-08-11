@@ -8,8 +8,8 @@ use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
-use ArnaudMoncondhuy\Authorization\Bridge\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
+use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
