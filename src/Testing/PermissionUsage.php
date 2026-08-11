@@ -72,7 +72,7 @@ final class PermissionUsage
                 continue;
             }
 
-            $body = self::executableCode(self::bodyOf($reflection->getMethod('__invoke')));
+            $body = self::executableCode(self::bodiesOf($reflection));
 
             // Un droit choisi par une valeur ne peut être rapproché de rien. Le dire plutôt
             // que d'accuser la classe de ne jamais réclamer ce qu'elle réclame peut-être :
@@ -177,6 +177,32 @@ final class PermissionUsage
         }
 
         return $code;
+    }
+
+    /**
+     * Toutes les méthodes que la classe déclare, `__invoke()` compris.
+     *
+     * Pas seulement `__invoke()` : un cas d'usage qui modifie plusieurs champs réclame le
+     * droit fin **au moment précis où le champ change**, donc dans la méthode qui l'applique.
+     * Ne lire que l'entrée accuserait ce motif — parfaitement légitime, et le plus fin qui
+     * soit — de déclarer des droits qu'il ne réclame jamais.
+     *
+     * La classe entière reste le cas d'usage : la garantie visée, « ce que l'attribut déclare,
+     * le corps le réclame », est intacte.
+     *
+     * @param \ReflectionClass<object> $reflection
+     */
+    private static function bodiesOf(\ReflectionClass $reflection): string
+    {
+        $bodies = '';
+
+        foreach ($reflection->getMethods() as $method) {
+            if ($method->getDeclaringClass()->getName() === $reflection->getName()) {
+                $bodies .= self::bodyOf($method)."\n";
+            }
+        }
+
+        return $bodies;
     }
 
     /**

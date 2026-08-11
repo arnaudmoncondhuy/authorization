@@ -142,6 +142,20 @@ final class PermissionUsageTest extends TestCase
     }
 
     /**
+     * Le motif le plus fin qui soit, et il ne doit pas être accusé : réclamer le droit fin au
+     * moment précis où le champ change impose de descendre la réclamation dans la méthode qui
+     * applique. Un contrôle qui ne lirait que `__invoke()` y verrait un droit déclaré et
+     * jamais réclamé.
+     */
+    public function testAPermissionDemandedInAPrivateMethodIsSeen(): void
+    {
+        self::assertNotContains(
+            'ChangeInvoiceFieldsUseCase déclare fixture.invoice.backdate sans jamais le réclamer',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
      * La faute la plus dangereuse qu'un contrôle puisse commettre : ouvrir en croyant fermer.
      *
      * Une garde mise en commentaire laisse le texte cherché dans le fichier. Une lecture brute

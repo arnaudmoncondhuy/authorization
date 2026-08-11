@@ -417,6 +417,64 @@ garde un juge, donc `authorization:doctor` reste satisfait.
 Reste à décider ce que fait ce verbe si on le rappelle sur une base déjà installée : le plus
 sûr est qu'il refuse, plutôt que de remettre les droits à leur état d'usine.
 
+### L'objet interdit
+
+Le contrat n'a pas de sujet. « Puis-je modifier *cette* facture-ci » ne se demande donc pas à
+`require()`, et il y a deux façons de le tenir. Elles ne s'excluent pas.
+
+**Contrôler dans le verbe, après le droit et avant toute lecture.**
+
+```php
+public function __invoke(string $number): void
+{
+    $this->access->require(InvoicePermission::Edit);
+
+    $invoice = $this->invoices->byNumber($number) ?? throw new UnknownInvoice($number);
+
+    if (!$invoice->belongsTo($this->caller->identity())) {
+        throw new UnknownInvoice($number);   // et non « interdit » : voir plus bas
+    }
+}
+```
+
+**Ou borner la lecture en amont, pour que l'objet interdit n'arrive jamais au verbe.** Un
+filtre Doctrine (`SQLFilter`) armé sur la requête retire de la base ce que l'appelant n'a pas
+le droit de voir : le dépôt ne le rend plus, et la question ne se pose plus.
+
+C'est souvent la meilleure des deux, et pour une raison qui n'a rien de théorique : **elle tient
+aussi les listes**. Un contrôle dans le verbe doit être rappelé sur chaque élément d'une
+collection, et une pagination appliquée avant le filtrage rend des pages de tailles inégales.
+
+Trois choses à savoir avant de la choisir :
+
+- **Elle ne couvre que la lecture.** Voir une facture et pouvoir la modifier restent deux
+  questions ; le filtre ne répond qu'à la première. Le jour où « modifier seulement les
+  miennes » est demandé, il faut le contrôle dans le verbe malgré tout.
+- **Un objet filtré fait lever les proxies paresseux.** Une association vers une ligne que le
+  filtre masque rend `EntityNotFoundException` — donc une erreur serveur, pas un refus. Les
+  entités filles doivent hériter du filtre par une jointure, jamais par une copie du niveau
+  de visibilité, qu'une propagation oubliée désynchroniserait en silence.
+- **Elle change le refus en absence.** Une fiche invisible n'est pas interdite, elle n'existe
+  pas : adresse directe, `404`. C'est **plus sûr** — un `403` révèle que la fiche existe — mais
+  c'est une décision à prendre en connaissance de cause, et à rendre partout de la même façon.
+
+### Un droit qui dépend de l'objet, dans un gabarit
+
+`can()` prend une `Permission` et rien d'autre : `{% if can(...) %}` ne sait pas parler d'une
+facture précise. Un bouton dont l'affichage dépend de l'objet continue donc d'appeler le
+contrôle d'accès du framework directement :
+
+```twig
+{% if is_granted('INVOICE_EDIT', invoice) %}
+```
+
+**C'est une frontière, pas un manque.** Ces droits-là relèvent d'un voter Symfony ordinaire,
+avec un sujet, et n'entrent pas dans l'inventaire — puisque l'inventaire recense ce que le code
+*exige*, et qu'aucun cas d'usage n'exige « modifier cette facture-ci ». Deux vocabulaires
+cohabitent alors dans les gabarits, et c'est normal : l'un dit le verbe, l'autre dit l'objet.
+
+Ce que la surface cache reste refusé par le verbe. Une case masquée n'est pas un contrôle.
+
 ### Faire cohabiter deux modèles de droits
 
 Rien n'empêche que certains droits se décident par rôle et d'autres par groupe. Deux voters
@@ -519,9 +577,10 @@ aussi par là qu'on se fait emprunter une identité.
 
 **4. Le paquet ne connaît pas d'objet.** `can()` et `require()` prennent une `Permission` et
 rien d'autre : « puis-je agir sur *cette* facture-ci » ne peut pas leur être demandé.
-L'autorisation d'objet est entièrement à vous, **dans le cas d'usage, après le contrôle du
-verbe et avant toute lecture**.
-*Vérifiable :* tout cas d'usage qui reçoit un identifiant d'objet porte ce second contrôle.
+L'autorisation d'objet est entièrement à vous, et il y a **deux façons de la tenir** — voir la
+recette « L'objet interdit » plus bas.
+*Vérifiable :* tout cas d'usage qui reçoit un identifiant d'objet porte ce second contrôle,
+ou bien la lecture qui le lui apporte est bornée en amont.
 
 **5. Si vous posez des regroupements de droits, l'écran qui accorde déplie ce que le voter
 déplie.** Sinon l'écran affiche un état que la réalité contredit, et l'erreur va dans le sens
