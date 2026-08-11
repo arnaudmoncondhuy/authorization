@@ -213,9 +213,24 @@ Il attrape aussi la brèche signalée plus haut : **une classe qui réclame un d
 cas d'usage**. Les trois refus de compilation ne la voient pas, puisqu'elle n'implémente pas
 `UseCase`.
 
-**Ses limites, écrites plutôt que tues :** il ne voit pas un droit exigé par une valeur
-calculée plutôt que par son cas écrit en toutes lettres, ni une énumération importée sous un
-autre nom.
+**La forme qu'il reconnaît, et elle contraint votre écriture :** il cherche
+`->require(Enumeration::Case)` **écrit en toutes lettres** dans le corps de `__invoke()`.
+
+```php
+$this->access->require(InvoicePermission::Finalize);   // vu
+
+$permission = InvoicePermission::Finalize;
+$this->access->require($permission);                   // PAS vu : le droit déclaré
+                                                       // sera signalé jamais réclamé
+```
+
+Ce n'est pas une négligence : c'est ce qui rend le contrôle sûr. Chercher le nom du droit
+plutôt que l'appel laisserait passer un `can()` qui teste sans s'y tenir, puisque les deux
+s'écrivent avec les mêmes caractères à un mot près. Écrivez donc le cas en clair — c'est aussi
+ce qui rend le corps lisible.
+
+**Ses autres limites, écrites plutôt que tues :** il ne voit pas une énumération importée sous
+un autre nom, ni un droit choisi par une valeur calculée.
 
 ### 6. Examiner l'installation
 
@@ -284,6 +299,24 @@ autorisez. Le jeton précédent est rendu quoi qu'il arrive, y compris si le tra
 sans quoi une commande qui échoue laisserait ses droits au traitement suivant du même
 processus.
 
+**L'`InMemoryUser` ci-dessus ne convient que si vos droits se décident sur les rôles du
+jeton.** Dès qu'ils dépendent de l'*objet* utilisateur — appartenance à un groupe, liste
+nominative, service d'affectation — un utilisateur en mémoire ne porte rien de tout cela, et
+le voter refuse sans que rien n'explique pourquoi. Chargez alors un vrai compte :
+
+```php
+private function identity(): TokenInterface
+{
+    $service = $this->users->loadUserByIdentifier('service');
+
+    return new UsernamePasswordToken($service, 'console', $service->getRoles());
+}
+```
+
+Le compte de service est un compte comme un autre, sans mot de passe utilisable, et vous
+l'inscrivez aux groupes qui lui sont nécessaires — donc visible et modifiable depuis l'écran
+d'attribution, comme n'importe quel autre.
+
 Et donner une identité n'accorde rien : c'est toujours un voter qui juge. **Taillez le rôle de
 service aussi étroitement qu'un rôle humain** — un rôle qui accorde tout est une porte ouverte,
 pas une commodité.
@@ -330,6 +363,35 @@ permission:
 ```
 
 Une clé absente s'affiche telle quelle : on voit immédiatement laquelle manque.
+
+### Le tout premier droit
+
+Le paquet garantit qu'aucun verbe ne s'expose sans droit — **y compris celui qui remplit la
+table des droits**. Sur une base vierge, personne ne détient rien : le verbe qui installe les
+droits se refuse lui-même. C'est une boucle, et elle se pose à la première installation de
+toute application.
+
+La sortie n'est pas d'écrire un rôle en dur dans le voter — cela laisserait une porte ouverte
+pour toujours. Elle est de faire dépendre ce droit-là de l'état qu'il sert à créer :
+
+```php
+protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token, ?Vote $vote = null): bool
+{
+    // Le seul droit que le modèle n'accorde pas : il s'accorde tant qu'il n'y a
+    // rien à accorder, et se referme dès la première ligne posée.
+    if (SetupPermission::Install->id() === $attribute) {
+        return $this->grants->isEmpty();
+    }
+
+    return $this->grants->grants($token->getUser(), $attribute);
+}
+```
+
+La porte se ferme d'elle-même, sans intervention et sans qu'on ait à y penser. Et le droit
+garde un juge, donc `authorization:doctor` reste satisfait.
+
+Reste à décider ce que fait ce verbe si on le rappelle sur une base déjà installée : le plus
+sûr est qu'il refuse, plutôt que de remettre les droits à leur état d'usine.
 
 ### Faire cohabiter deux modèles de droits
 
