@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Integration;
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
+use ArnaudMoncondhuy\Authorization\Bridge\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\UndeclaredUseCase;
@@ -102,6 +103,18 @@ final class BundleWiringTest extends TestCase
         );
 
         self::assertContains(MissingPermissionListener::class, $listeners);
+    }
+
+    /**
+     * De quoi atteindre un verbe métier sans utilisateur connecté. Sans ce service, une
+     * commande de console se voit refuser tout ce qu'elle appelle, et la promesse d'un même
+     * verbe atteignable par toutes les portes ne tient que pour celles qui ont une session.
+     */
+    public function testTheSystemIdentityIsAvailableWhereSecurityIs(): void
+    {
+        $container = $this->boot(ViewInvoiceUseCase::class, InvoiceBook::class);
+
+        self::assertInstanceOf(SystemIdentity::class, $container->get(SystemIdentity::class));
     }
 
     /**

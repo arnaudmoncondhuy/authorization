@@ -6,6 +6,7 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Kernel;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
+use ArnaudMoncondhuy\Authorization\Bridge\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -21,7 +22,7 @@ final class ExposeForTestingPass implements CompilerPassInterface
 {
     public function process(ContainerBuilder $container): void
     {
-        foreach ([PermissionCatalog::class, MissingPermissionListener::class] as $service) {
+        foreach ([PermissionCatalog::class, MissingPermissionListener::class, SystemIdentity::class] as $service) {
             if ($container->hasDefinition($service)) {
                 $container->getDefinition($service)->setPublic(true);
             }
