@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization;
 
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckOnlyUseCasesDeclarePermissionsPass;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckSurfacesDelegateToUseCasesPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckUseCasesDeclarePermissionsPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RegisterPermissionCatalogPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\Tag;
@@ -38,6 +39,7 @@ final class AuthorizationBundle extends AbstractBundle
 
         $container->addCompilerPass(new CheckUseCasesDeclarePermissionsPass());
         $container->addCompilerPass(new CheckOnlyUseCasesDeclarePermissionsPass());
+        $container->addCompilerPass(new CheckSurfacesDelegateToUseCasesPass());
         $container->addCompilerPass(new RegisterPermissionCatalogPass());
     }
 

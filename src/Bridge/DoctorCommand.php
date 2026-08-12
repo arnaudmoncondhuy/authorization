@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
+use ArnaudMoncondhuy\Authorization\CallsNoUseCase;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -35,6 +36,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
  * Elle échoue plutôt que d'afficher : une routine qualité ne peut s'appuyer que sur ce qui
  * rend un code de sortie.
  */
+#[CallsNoUseCase("Examine une installation : elle lit le catalogue et interroge les voters, elle n'exerce aucun verbe métier.")]
 #[AsCommand(
     name: 'authorization:doctor',
     description: 'Vérifie qu\'une installation du dispositif d\'autorisation se tient.',

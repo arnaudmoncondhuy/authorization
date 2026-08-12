@@ -38,6 +38,7 @@ poste de qui a écrit la faute.
 | Tout cas d'usage déclare au moins un droit | un verbe qui s'exécute sans arbitrage, et qu'on ne peut accorder à personne |
 | Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
 | Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre — la collision se juge sur la valeur, donc entre deux cas d'une même énumération autant qu'entre deux énumérations |
+| Toute porte d'entrée appelle un verbe métier | une surface qui agit sans traverser aucun contrôle de droit — c'est par là qu'un inconnu sans compte peut faire ce qu'il veut |
 
 **Ces trois règles ne jugent que ce qui implémente `UseCase`.** Une classe qui oublie
 l'interface leur échappe entièrement, tout en pouvant réclamer des droits. Le langage ne sait
@@ -416,6 +417,59 @@ garde un juge, donc `authorization:doctor` reste satisfait.
 
 Reste à décider ce que fait ce verbe si on le rappelle sur une base déjà installée : le plus
 sûr est qu'il refuse, plutôt que de remettre les droits à leur état d'usine.
+
+### Une porte qui n'appelle aucun verbe
+
+Le quatrième refus de compilation examine ce que Symfony marque lui-même comme porte d'entrée :
+`controller.service_arguments`, `console.command`, `messenger.message_handler`. **Rien à
+déclarer** — un contrôleur ajouté demain est examiné parce que le framework le marque, et une
+liste qu'on oublie de tenir laisserait passer exactement ce que ce contrôle cherche.
+
+Une porte qui n'appelle légitimement aucun verbe — une redirection, un formulaire de connexion
+— le dit sur place, avec sa raison :
+
+```php
+#[CallsNoUseCase('Redirige vers le tableau de bord, sans lire aucune donnée.')]
+final class HomeController
+```
+
+Une application qui ouvre une porte d'un autre genre — un outil pour un assistant, un point
+d'entrée JSON-RPC — la fait examiner en nommant son tag :
+
+```yaml
+parameters:
+    authorization.surface_tags: ['app.mcp_tool']
+```
+
+**Sa limite, écrite plutôt que tue :** une porte livrée par une dépendance n'est pas la vôtre à
+gouverner, et se reconnaît à son chemin de fichier — un projet qui aurait renommé son dossier
+`vendor/` y échapperait.
+
+### Ce qu'un autre que l'appelant a le droit de faire
+
+`Authorizer` répond toujours pour l'appelant courant, et c'est ce qui le rend sûr. Trois
+questions n'entrent pas dans cette forme : ne pas notifier quelqu'un sur un module qu'il a
+perdu, montrer à un administrateur ce qu'une personne obtiendra, vérifier avant d'accorder ce
+qu'un compte détient déjà.
+
+```php
+public function __construct(private UserAuthorizer $rights)
+{
+}
+
+if (!$this->rights->can($destinataire, InvoicePermission::View)) {
+    return;   // ne pas notifier sur ce qu'il ne peut plus voir
+}
+```
+
+Le compte est désigné par son identifiant, chargé par **votre** fournisseur, et jugé par **vos**
+voters : la décision reste écrite à un seul endroit. Sans ce contrat, la seule issue est de
+réimplémenter la décision hors session — et deux copies d'une même règle finissent par diverger.
+
+**Il ne sait que répondre.** Aucune méthode ne lève, et il n'existe pas de pendant à
+`require()` : savoir ce qu'un tiers peut faire n'est pas l'autoriser à le faire, et confondre
+les deux transformerait une lecture en usurpation. Un identifiant qu'aucun compte ne porte rend
+`false`.
 
 ### L'objet interdit
 

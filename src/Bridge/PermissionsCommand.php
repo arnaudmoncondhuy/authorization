@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
+use ArnaudMoncondhuy\Authorization\CallsNoUseCase;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -17,6 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  * L'inventaire n'existe aujourd'hui que dans un service injecté : sans cette commande, la
  * seule façon de savoir ce que l'application réclame est de lire toutes ses classes.
  */
+#[CallsNoUseCase("Affiche l'inventaire : elle ne fait qu'énumérer ce que le code exige.")]
 #[AsCommand(
     name: 'authorization:permissions',
     description: 'Liste les droits que les cas d\'usage exigent.',
