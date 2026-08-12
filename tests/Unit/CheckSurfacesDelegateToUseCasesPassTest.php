@@ -107,6 +107,21 @@ final class CheckSurfacesDelegateToUseCasesPassTest extends TestCase
         self::assertTrue($container->hasDefinition('vendor_command'));
     }
 
+    /**
+     * Le noyau n'est pas une porte, c'est l'application. `MicroKernelTrait` l'inscrit comme
+     * contrôleur pour qu'une route puisse pointer sur l'une de ses méthodes ; le juger
+     * refuserait de compiler à peu près toute application Symfony.
+     */
+    public function testTheKernelIsNotASurface(): void
+    {
+        $container = new ContainerBuilder();
+        $container->register('kernel', SurfacelessKernel::class)->addTag('controller.service_arguments');
+
+        new CheckSurfacesDelegateToUseCasesPass()->process($container);
+
+        self::assertTrue($container->hasDefinition('kernel'));
+    }
+
     /** @param class-string ...$classes */
     private function containerWith(string ...$classes): ContainerBuilder
     {
@@ -129,5 +144,26 @@ final class RedirectingController
     public function __invoke(): string
     {
         return '/';
+    }
+}
+
+/**
+ * Un noyau d'application, inscrit comme contrôleur par le trait de Symfony.
+ */
+final class SurfacelessKernel extends \Symfony\Component\HttpKernel\Kernel
+{
+    /**
+     * Symfony 8.1 a déplacé l'interface des bundles ; `HttpKernel\Kernel` annonce encore
+     * l'ancienne, dépréciée.
+     *
+     * @return iterable<\Symfony\Component\DependencyInjection\Kernel\BundleInterface>
+     */
+    public function registerBundles(): iterable
+    {
+        return [];
+    }
+
+    public function registerContainerConfiguration(\Symfony\Component\Config\Loader\LoaderInterface $loader): void
+    {
     }
 }

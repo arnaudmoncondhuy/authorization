@@ -59,7 +59,7 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
                     continue;
                 }
 
-                if (self::comesFromADependency($reflection)) {
+                if (self::comesFromADependency($reflection) || self::isTheKernel($reflection)) {
                     continue;
                 }
 
@@ -117,6 +117,21 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
         $file = $reflection->getFileName();
 
         return false === $file || str_contains(strtr($file, '\\', '/'), '/vendor/');
+    }
+
+    /**
+     * Le noyau n'est pas une porte, c'est l'application.
+     *
+     * `MicroKernelTrait` l'inscrit comme contrôleur pour qu'une route puisse pointer sur l'une
+     * de ses méthodes. Le juger reviendrait à refuser de compiler toute application Symfony
+     * montée ainsi, c'est-à-dire à peu près toutes.
+     *
+     * @param \ReflectionClass<object> $reflection
+     */
+    private static function isTheKernel(\ReflectionClass $reflection): bool
+    {
+        return is_a($reflection->getName(), 'Symfony\\Component\\HttpKernel\\KernelInterface', true)
+            || is_a($reflection->getName(), 'Symfony\\Component\\DependencyInjection\\Kernel\\KernelInterface', true);
     }
 
     /**
