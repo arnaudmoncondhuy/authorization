@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Integration;
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
+use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
@@ -15,6 +16,7 @@ use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseC
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Stock\AdjustStockUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DeclaringController;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
+use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
@@ -115,6 +117,17 @@ final class BundleWiringTest extends TestCase
         $container = $this->boot(ViewInvoiceUseCase::class, InvoiceBook::class);
 
         self::assertInstanceOf(SystemIdentity::class, $container->get(SystemIdentity::class));
+    }
+
+    /**
+     * Répondre sur un autre que l'appelant se câble au même endroit et sous la même condition
+     * que le reste : sans pare-feu, la question n'aurait personne à qui la poser.
+     */
+    public function testTheContractForAThirdPartyResolvesToTheSecurityAdapter(): void
+    {
+        $container = $this->boot(ViewInvoiceUseCase::class, InvoiceBook::class);
+
+        self::assertInstanceOf(SecurityUserAuthorizer::class, $container->get(UserAuthorizer::class));
     }
 
     /**

@@ -10,6 +10,7 @@ use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
+use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 
@@ -38,8 +39,10 @@ final class ExposeForTestingPass implements CompilerPassInterface
             }
         }
 
-        if ($container->hasAlias(Authorizer::class)) {
-            $container->getAlias(Authorizer::class)->setPublic(true);
+        foreach ([Authorizer::class, UserAuthorizer::class] as $alias) {
+            if ($container->hasAlias($alias)) {
+                $container->getAlias($alias)->setPublic(true);
+            }
         }
     }
 }
