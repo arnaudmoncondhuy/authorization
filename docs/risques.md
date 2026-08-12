@@ -313,6 +313,36 @@ c'est ce qui reste au projet.
 
 ---
 
+### 10 bis. Une **route** qui n'appelle aucun verbe, dans une classe qui en appelle
+
+**Ce qui casse.** Le quatrième refus de compilation juge une **classe**, pas une route. Un
+contrôleur dont trois routes appellent des cas d'usage et dont la quatrième se contente de
+poster un message passe le contrôle sans réserve : la classe atteint bien un verbe.
+
+C'est exactement la forme qu'avait la faille la plus grave trouvée sur une application de ce
+paquet — une route d'API qui acceptait une demande, la postait dans une file, et lisait dans le
+corps de la requête le compte au nom duquel agir. Un inconnu sans compte finalisait des
+factures.
+
+**Il faut donc le dire sans détour : la passe n'aurait pas attrapé la faute qui l'a fait
+naître.** Ce qu'elle attrape, c'est la porte entièrement non gardée — une surface qui ne
+délègue jamais, celle qu'on ajoute en oubliant le dispositif. Sur une application réelle, ce
+genre-là existe aussi : une passe équivalente en a trouvé huit d'un coup.
+
+**Comment ça se manifeste. Pas du tout.** Aucune compilation ne bronche, aucun test ne tombe,
+le docteur reste vert. La route répond, et elle répond à tout le monde.
+
+**Comment l'éviter.** La règle 1 de [ce qui reste au projet](ce-qui-reste-au-projet.md) :
+réclamer le droit **là où la demande est acceptée**, pas seulement là où elle est traitée.
+Toute route qui appelle `dispatch()` appelle d'abord `require()`.
+
+**Le docteur ? Il pourrait, et voici comment.** Le contrôle existe déjà pour les cas d'usage :
+`PermissionUsage` lit les corps de méthode et y cherche l'appel. Le même mécanisme, appliqué
+aux méthodes d'une surface, dirait « cette route poste un message sans qu'aucun droit soit
+réclamé ». Ce n'est pas écrit, et c'est le premier contrôle à ajouter.
+
+---
+
 ### 11. Le docteur exécute vos voters pour de vrai
 
 **Ce qui casse.** Rien, mais il faut le savoir. Le docteur appelle `vote()` sur chaque voter
@@ -460,6 +490,10 @@ cela lui pose la moindre question.
 ---
 
 ## Les contrôles qui restent à apprendre au docteur
+
+**Le premier de la liste**, et il vient du risque 10 bis : une route qui poste un message ou
+écrit en base sans qu'aucun droit soit réclamé. Le mécanisme existe déjà — `PermissionUsage`
+lit les corps de méthode — il n'est pas encore braqué sur les surfaces.
 
 Résumé de la section C, dans l'ordre du rapport bénéfice / coût.
 
