@@ -44,3 +44,44 @@ jobs:
 
       - name: Routine qualité
         run: ./check.sh
+
+  # Le manifeste promet « ^7.3 || ^8.1 ». Composer retient toujours la plus haute : sans ce
+  # job, la moitié de la promesse ne serait vérifiée nulle part, et le paquet annoncerait une
+  # compatibilité que personne n'a jouée.
+  #
+  # Seuls les tests sont rejoués ici. Le style, l'analyse statique, les frontières et la
+  # détection de secrets ne dépendent pas de la version de Symfony installée ; les tests, eux,
+  # démarrent un vrai noyau, et c'est là que la différence se voit.
+  branche-lts:
+    name: Tests sur Symfony 7.4 LTS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+
+      # `-W` autorise composer à redescendre aussi les dépendances indirectes : sans lui, la
+      # résolution échoue sur les paquets que framework-bundle tire en 8.x.
+      - name: Installer sur la branche 7.4
+        run: >
+          composer update --no-interaction --no-progress -W
+          "symfony/config:^7.4"
+          "symfony/dependency-injection:^7.4"
+          "symfony/event-dispatcher:^7.4"
+          "symfony/http-kernel:^7.4"
+          "symfony/security-core:^7.4"
+          "symfony/console:^7.4"
+          "symfony/framework-bundle:^7.4"
+          "symfony/runtime:^7.4"
+          "symfony/security-bundle:^7.4"
+
+      - name: Vérifier que la branche 7.4 est bien celle qui tourne
+        run: composer show symfony/dependency-injection | grep -E '^versions.*7\.4'
+
+      - name: Tests
+        run: php -d memory_limit=512M vendor/bin/phpunit -c qa/phpunit.dist.xml --testsuite unitaires,integration

@@ -20,7 +20,7 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 /**
  * Examine une installation et refuse de conclure au vert sans raison.
  *
- * Elle cherche deux choses qu'aucun autre contrôle ne voit.
+ * Elle cherche trois choses qu'aucun autre contrôle ne voit.
  *
  * **Un droit qu'aucun voter ne prend en charge** : le code l'exige, l'inventaire le propose,
  * l'écran d'attribution permet de le cocher — et il est refusé à tout le monde, administrateur
@@ -33,6 +33,11 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
  * tout à une poignée d'administrateurs en est un usage légitime — d'où un signalement par
  * défaut, et un échec sur demande.
  *
+ * **Un voter qui lève quand on l'interroge sans utilisateur** : l'examen se joue avec un jeton
+ * vide, qui est celui d'une requête anonyme. Un voter qui y lève lèvera aussi en production, et
+ * la surface rendra une erreur serveur au lieu d'un refus. Il est rapporté, l'examen continue,
+ * et le bilan dit que la conclusion sur les orphelins n'est plus entière.
+ *
  * Elle échoue plutôt que d'afficher : une routine qualité ne peut s'appuyer que sur ce qui
  * rend un code de sortie.
  */
@@ -43,11 +48,20 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
 )]
 final class DoctorCommand extends Command
 {
-    /** @param iterable<VoterInterface> $voters */
+    /**
+     * @param iterable<VoterInterface> $voters
+     * @param ?class-string            $onBehalf l'adaptateur qui répond sur un tiers, ou nul quand
+     *                                           la configuration de sécurité ne déclare aucun
+     *                                           fournisseur de comptes. Le nom et non le service :
+     *                                           l'injecter le compterait utilisé, et
+     *                                           {@see \ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass}
+     *                                           ferait échouer la compilation ici même
+     */
     public function __construct(
         private readonly PermissionCatalog $catalog,
         private readonly Authorizer $access,
         private readonly iterable $voters,
+        private readonly ?string $onBehalf = null,
     ) {
         parent::__construct();
     }
@@ -67,6 +81,8 @@ final class DoctorCommand extends Command
         $console = new SymfonyStyle($input, $output);
 
         $console->writeln(\sprintf('Contrat  : %s', $this->access::class));
+        $console->writeln(\sprintf('Tiers    : %s', $this->onBehalf
+            ?? 'non branché — la configuration de sécurité ne déclare aucun fournisseur de comptes'));
         $console->writeln(\sprintf('Voters   : %d enregistré(s)', \count($this->registeredVoters())));
 
         $permissions = $this->catalog->all();
@@ -85,19 +101,38 @@ final class DoctorCommand extends Command
 
         /** @var array<string, list<string>> $judges */
         $judges = [];
+        /** @var array<string, string> $raised */
+        $raised = [];
 
         foreach ($permissions as $permission) {
-            $judges[$permission->id()] = $this->judgesOf($permission);
+            $judges[$permission->id()] = $this->judgesOf($permission, $raised);
         }
 
         $orphans = array_keys(array_filter($judges, static fn (array $j): bool => [] === $j));
         $shared = array_filter($judges, static fn (array $j): bool => \count($j) > 1);
+
+        if ([] !== $raised) {
+            $console->error('Des voters ont levé une exception pendant l\'examen :');
+            foreach ($raised as $voter => $trouble) {
+                $console->writeln(\sprintf('  %s — %s', $voter, $trouble));
+            }
+            $console->writeln('L\'examen les interroge avec un jeton sans utilisateur, qui est celui d\'une');
+            $console->writeln('requête anonyme. Un voter qui lève ici lèvera là-bas : la surface rendra une');
+            $console->writeln('erreur serveur au lieu d\'un refus. Garder l\'absence d\'utilisateur dans');
+            $console->writeln('`supports()` ou en tête de `voteOnAttribute()` ferme les deux à la fois.');
+        }
 
         if ([] !== $orphans) {
             $console->error('Des droits ne sont jugés par personne, et sont donc refusés à tout le monde :');
             $console->listing($orphans);
             $console->writeln('Un voter doit reconnaître ces identités dans son `supports()`, sinon les');
             $console->writeln('verbes qui les exigent restent fermés, y compris pour un administrateur.');
+
+            if ([] !== $raised) {
+                $console->writeln('');
+                $console->writeln('⚠ Un voter au moins n\'a pas pu être examiné : cette liste peut nommer un');
+                $console->writeln('  droit qu\'il aurait pris en charge. La lire après avoir réparé ce qui lève.');
+            }
         }
 
         if ([] !== $shared) {
@@ -111,7 +146,10 @@ final class DoctorCommand extends Command
             $console->writeln('la question.');
         }
 
-        if ([] !== $orphans || ([] !== $shared && $input->getOption('strict'))) {
+        // Un voter qui lève fait échouer au même titre qu'un droit orphelin, et pour la raison
+        // qui fonde cette commande : l'examen n'a pas eu lieu. Rendre SUCCESS ici certifierait
+        // une installation qu'on n'a pas su regarder.
+        if ([] !== $orphans || [] !== $raised || ([] !== $shared && $input->getOption('strict'))) {
             return Command::FAILURE;
         }
 
@@ -128,15 +166,36 @@ final class DoctorCommand extends Command
      * l'abstention y est la réponse lorsque `supports()` refuse. Un voter qui s'abstient pour
      * une autre raison, l'absence d'utilisateur par exemple, serait compté absent à tort.
      *
+     * Un voter qui lève est retenu comme tel, et l'examen continue. Laisser filer l'exception
+     * ferait tomber la commande sur le premier voter fragile, et les droits suivants ne
+     * seraient jamais regardés — un diagnostic qui s'interrompt en dit moins qu'un diagnostic
+     * qui rapporte. Il n'est compté ni juge ni absent : ce qu'il aurait répondu reste inconnu,
+     * et c'est cela qu'il faut dire.
+     *
+     * @param array<string, string> $raised recueille les voters qui ont levé, par classe
+     *
      * @return list<string>
      */
-    private function judgesOf(Permission $permission): array
+    private function judgesOf(Permission $permission, array &$raised): array
     {
         $nobody = new NullToken();
         $judges = [];
 
         foreach ($this->registeredVoters() as $voter) {
-            if (VoterInterface::ACCESS_ABSTAIN !== $voter->vote($nobody, null, [$permission->id()])) {
+            // Le premier incident suffit à disqualifier le voter : réinterroger celui qui vient
+            // de lever sur les droits suivants n'apprendrait rien et allongerait le rapport.
+            if (isset($raised[$voter::class])) {
+                continue;
+            }
+
+            try {
+                $vote = $voter->vote($nobody, null, [$permission->id()]);
+            } catch (\Throwable $trouble) {
+                $raised[$voter::class] = \sprintf('%s : %s', $trouble::class, $trouble->getMessage());
+                continue;
+            }
+
+            if (VoterInterface::ACCESS_ABSTAIN !== $vote) {
                 $judges[] = $voter::class;
             }
         }

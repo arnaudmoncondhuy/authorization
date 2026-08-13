@@ -20,10 +20,11 @@
     "prefer-stable": true,
     "require": {
         "php": ">=8.4",
-        "symfony/config": "^8.1",
-        "symfony/dependency-injection": "^8.1",
-        "symfony/event-dispatcher": "^8.1",
-        "symfony/security-core": "^8.1"
+        "symfony/config": "^7.3 || ^8.1",
+        "symfony/dependency-injection": "^7.3 || ^8.1",
+        "symfony/event-dispatcher": "^7.3 || ^8.1",
+        "symfony/http-kernel": "^7.3 || ^8.1",
+        "symfony/security-core": "^7.3 || ^8.1"
     },
     "require-dev": {
         "deptrac/deptrac": "^4.7",
@@ -34,15 +35,13 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "phpunit/phpunit": "^13.3",
         "rector/rector": "^2.6",
-        "symfony/console": "^8.1",
-        "symfony/framework-bundle": "^8.1",
-        "symfony/http-kernel": "^8.1",
-        "symfony/runtime": "^8.1",
-        "symfony/security-bundle": "^8.1"
+        "symfony/console": "^7.3 || ^8.1",
+        "symfony/framework-bundle": "^7.3 || ^8.1",
+        "symfony/runtime": "^7.3 || ^8.1",
+        "symfony/security-bundle": "^7.3 || ^8.1"
     },
     "suggest": {
-        "symfony/console": "Pour les commandes authorization:permissions et authorization:doctor.",
-        "symfony/http-kernel": "Pour traduire un refus en réponse HTTP 403 sans écrire l'écouteur soi-même."
+        "symfony/console": "Pour les commandes authorization:permissions et authorization:doctor."
     },
     "autoload": {
         "psr-4": {

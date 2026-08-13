@@ -40,9 +40,22 @@ final class ExposeForTestingPass implements CompilerPassInterface
         }
 
         foreach ([Authorizer::class, UserAuthorizer::class] as $alias) {
-            if ($container->hasAlias($alias)) {
-                $container->getAlias($alias)->setPublic(true);
+            if (!$container->hasAlias($alias)) {
+                continue;
             }
+
+            // Un alias public retient sa cible : la rendre publique ici la compterait utilisée.
+            // Sur une définition que le paquet a marquée fautive — l'adaptateur « tiers » d'une
+            // application sans fournisseur de comptes — le noyau de test s'arrêterait donc là
+            // où une application se contente de ne pas avoir le service. Ce serait le confort
+            // des tests qui déciderait du comportement examiné.
+            $target = (string) $container->getAlias($alias);
+
+            if ($container->hasDefinition($target) && $container->getDefinition($target)->hasErrors()) {
+                continue;
+            }
+
+            $container->getAlias($alias)->setPublic(true);
         }
     }
 }

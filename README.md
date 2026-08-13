@@ -92,13 +92,18 @@ par diverger.
 
 ## Dépendances
 
+**Symfony `^7.3 || ^8.1`**, et donc la **7.4 LTS**, où tourne la majeure partie du parc en
+production. Les deux branches sont jouées par la pipeline : la routine complète sur la plus
+haute, la suite de tests sur la 7.4. Une compatibilité qu'on annonce sans la jouer n'est pas
+une compatibilité.
+
 | Composant | Pourquoi |
 |---|---|
-| `symfony/dependency-injection` | les trois passes, et la classe de bundle |
+| `symfony/dependency-injection` | les quatre passes |
 | `symfony/config` | le chargement de la configuration du bundle |
 | `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
 | `symfony/event-dispatcher` | l'écouteur qui traduit un refus |
-| `symfony/http-kernel` | *suggéré* — sans lui, l'écouteur n'est pas enregistré |
+| `symfony/http-kernel` | la classe de bundle, et l'écouteur qui traduit un refus en 403 |
 | `symfony/console` | *suggéré* — sans lui, les deux commandes n'existent pas |
 
 Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,

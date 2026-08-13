@@ -47,6 +47,20 @@ entièrement (§ C.6, § C.7).
 **9. Le paquet ne configure pas la stratégie de décision.** Elle reste celle de Symfony,
 et elle change tout (§ C.3).
 
+**10. `UserAuthorizer` exige un fournisseur de comptes.** Il désigne l'autre par un
+identifiant, et c'est votre `security.providers` qui le rapporte à un compte. Une application
+qui n'en déclare aucun ne peut pas obtenir ce contrat : la compilation s'arrête si elle
+l'injecte, et ne dit rien si elle ne l'injecte pas. Répondre `false` faute de fournisseur
+aurait fermé aussi — donc sans faille — mais aurait fait passer une absence de réponse pour un
+refus de droit, et c'est la seule chose que ce contrat sache dire.
+
+**11. `PermissionUsage` ne lit que ce que les chemins nomment.** Il déduit un type de
+l'emplacement de chaque fichier, selon PSR-4. Un fichier qui ne déclare pas ce que sa place
+annonce est **rapporté comme faute**, jamais sauté : une classe renommée sans que son fichier
+suive échapperait sinon à toute lecture tout en portant du métier. Un fichier de fonctions
+logé dans l'arborescence balayée est donc signalé lui aussi — le sortir de là, ou pointer le
+contrôle plus bas, est la réponse.
+
 ---
 
 ## Les risques de casse
@@ -203,6 +217,11 @@ Un voter qui jugerait très bien un vrai compte, mais s'abstient sur un jeton nu
 absent **à tort**. C'est un faux positif, donc l'erreur va dans le bon sens — on regarde, et on
 constate.
 
+Le voisin de ce cas est celui qui ne s'abstient pas mais **lève** : il prend le droit en charge,
+puis lit l'utilisateur sans se demander s'il y en a un. Celui-là n'est compté ni juge ni absent,
+mais nommé pour ce qu'il est (§ C.11) — et ce qu'il annonce dépasse le diagnostic, puisqu'une
+requête anonyme lui fera rendre une erreur serveur au lieu d'un refus.
+
 Sur un voter bâti sur la classe abstraite `Voter` de Symfony, le cas ne peut pas se produire :
 `supports()` ne reçoit pas le jeton, et `voteOnAttribute()` rend un booléen. **Refusez
 explicitement**, comme dans l'exemple du § A.3, et le problème n'existe pas.
@@ -357,10 +376,16 @@ continue sans base, l'étape échoue pour une raison qui n'a rien à voir avec l
 les voters qui ne dépendent d'aucun compte aussi peu bavards que possible : refuser avant toute
 requête quand le jeton n'a pas d'utilisateur suffit à la plupart.
 
-**Le docteur ? Il le détecte déjà, mais mal.** Il laisse remonter l'exception brute. Attraper
-par voter et rapporter « ce voter n'a pas pu se prononcer sur `setup.install` : … » dirait la
-même chose sans faire croire à une panne de l'application, et permettrait de conclure sur les
-autres droits.
+**Le docteur ? Il le détecte, et il le rapporte.** Il attrape par voter, le nomme avec son
+exception, et poursuit l'examen des autres droits. Le bilan reste rouge — un examen qui n'a pas
+eu lieu ne se conclut pas au vert — mais il dit ce qui n'a pas pu être regardé au lieu de
+s'interrompre sur une trace.
+
+Un voter qui s'était déjà effondré n'est pas réinterrogé sur les droits suivants : le premier
+incident suffit à le disqualifier, et répéter la même trace n'apprendrait rien.
+
+Et quand un droit apparaît orphelin **à côté** d'un voter qui a levé, la réserve est écrite : ce
+droit est peut-être le sien. Conclure sans elle enverrait écrire un voter qui existe déjà.
 
 ---
 
@@ -501,7 +526,7 @@ Résumé de la section C, dans l'ordre du rapport bénéfice / coût.
 |---|---|---|
 | C.3 | compter les voters qui jugent chaque droit, avertir au-delà de un | pourrait — il a déjà catalogue et voters en main |
 | C.14 | afficher la stratégie de décision en tête du rapport | pourrait — une ligne |
-| C.11 | attraper l'exception d'un voter et la rapporter au lieu de la laisser fuir | pourrait — améliore ce qu'il fait déjà |
+| C.11 | attraper l'exception d'un voter et la rapporter au lieu de la laisser fuir | **le fait déjà** |
 | C.6 | signaler une classe qui implémente `UseCase` sans porter le tag | pourrait — mieux encore dans la passe de compilation |
 | C.1 | confronter les identités stockées au catalogue | pourrait, si l'application lui fournit ses identités stockées |
 | C.5 | un droit qu'aucun voter ne prend en charge | **détecte déjà** |

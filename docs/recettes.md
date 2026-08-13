@@ -189,6 +189,16 @@ réimplémenter la décision hors session — et deux copies d'une même règle 
 les deux transformerait une lecture en usurpation. Un identifiant qu'aucun compte ne porte rend
 `false`.
 
+**Il exige que votre `security.providers` ne soit pas vide.** C'est la seule condition, et elle
+est tenue par le conteneur : injecter `UserAuthorizer` dans une application qui ne déclare aucun
+fournisseur de comptes arrête la compilation sur un message qui le dit. Le nombre, lui, est
+indifférent — un fournisseur, ou une table plus un annuaire LDAP, le contrat interroge la chaîne
+entière.
+
+Le refus est ciblé : une application sans fournisseur qui n'injecte pas ce contrat compile sans
+un mot. Ne pas s'en servir n'a pas à coûter un avertissement, et `authorization:doctor` donne de
+toute façon l'état sur sa ligne `Tiers`.
+
 ## L'objet interdit
 
 Le contrat n'a pas de sujet. « Puis-je modifier *cette* facture-ci » ne se demande donc pas à
@@ -297,7 +307,7 @@ seulement qu'on l'accorde au mauvais endroit.
 `Authorizer::require()` lève `MissingPermission`, une exception du **métier** — un cas d'usage
 se joue aussi hors HTTP. Elle porte le droit manquant, pour qu'une surface puisse dire lequel.
 
-En présence de `symfony/http-kernel`, le paquet enregistre un écouteur qui la traduit en 403.
+Le paquet enregistre un écouteur qui la traduit en 403.
 Pour la traduire autrement — une erreur nommée pour un outil, un message pour une console —
 attrapez-la vous-même :
 

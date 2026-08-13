@@ -69,8 +69,9 @@ est la description exécutable.
 
 - **racine `src/`** — le contrat. PHP nu, aucune dépendance, pas même le framework. C'est ce
   qu'une application importe dans son domaine.
-- **`DependencyInjection/`** — les trois passes et le nom du tag. Connaît
-  `symfony/dependency-injection`, et rien d'autre.
+- **`DependencyInjection/`** — les quatre passes et le nom du tag. Connaît
+  `symfony/dependency-injection`, et rien d'autre — pas même `Bridge/` : la passe qui juge
+  l'adaptateur « tiers » part de l'alias du contrat et traite ce qu'il désigne.
 - **`Bridge/`** — les adaptateurs, nommés par le fournisseur qu'ils branchent. Une application
   ferme ce dossier à ses surfaces : l'adaptateur y donne accès au contrôle d'accès du
   framework, et un cas d'usage ne va jamais chercher qui est connecté.

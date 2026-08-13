@@ -7,12 +7,13 @@ namespace ArnaudMoncondhuy\Authorization;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckOnlyUseCasesDeclarePermissionsPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckSurfacesDelegateToUseCasesPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckUseCasesDeclarePermissionsPass;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RegisterPermissionCatalogPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\Tag;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\Kernel\AbstractBundle;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 
 /**
@@ -20,6 +21,12 @@ use Symfony\Component\HttpKernel\Event\ExceptionEvent;
  *
  * Reste à la racine de `src/` : {@see AbstractBundle::getPath()} calcule le chemin du paquet
  * en remontant de deux dossiers depuis ce fichier, et c'est ce qui rend `../config/` juste.
+ *
+ * Celle de `HttpKernel\Bundle\` et non celle de `DependencyInjection\Kernel\`, qui lui est
+ * pourtant identique en 8.1 — la seconde n'existe pas avant. C'est la seule classe du paquet
+ * qui décidait de la version minimale de Symfony, et la prendre ici ouvre la 7.4 LTS, où
+ * tourne la majorité des applications en production. Tout le reste de ce que le paquet cite,
+ * `UserAuthorizationCheckerInterface` compris, existe depuis la 7.3.
  */
 final class AuthorizationBundle extends AbstractBundle
 {
@@ -41,6 +48,12 @@ final class AuthorizationBundle extends AbstractBundle
         $container->addCompilerPass(new CheckOnlyUseCasesDeclarePermissionsPass());
         $container->addCompilerPass(new CheckSurfacesDelegateToUseCasesPass());
         $container->addCompilerPass(new RegisterPermissionCatalogPass());
+
+        // Celle-ci ne juge aucun code de l'application : elle constate qu'un adaptateur du
+        // paquet n'aurait pas de quoi répondre. Elle vit ici et non dans `loadExtension()`
+        // parce qu'elle lit ce que SecurityExtension déclare, et que l'ordre de chargement des
+        // extensions ne se commande pas.
+        $container->addCompilerPass(new RefuseUserAuthorizerWithoutProviderPass());
     }
 
     /**

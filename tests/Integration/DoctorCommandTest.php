@@ -6,8 +6,10 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Integration;
 
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
+use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\OverlappingPermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\UnguardedPermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
@@ -89,6 +91,56 @@ final class DoctorCommandTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $this->diagnose(...$services)->getStatusCode());
         self::assertSame(Command::FAILURE, $this->diagnoseStrictly(...$services)->getStatusCode());
+    }
+
+    /**
+     * Le voter fragile ne fait plus tomber la commande.
+     *
+     * Laisser filer l'exception rendait un diagnostic muet sur tout le reste : le premier voter
+     * qui lève emportait l'examen des droits suivants, et la sortie ne disait ni lesquels ni
+     * combien. Il est nommé, l'examen continue, et le bilan reste rouge — un examen qui n'a pas
+     * eu lieu ne se conclut pas au vert.
+     */
+    public function testAVoterThatRaisesIsReportedInsteadOfEndingTheExamination(): void
+    {
+        $tester = $this->diagnose(
+            ViewInvoiceUseCase::class,
+            InvoiceBook::class,
+            UnguardedPermissionVoter::class,
+        );
+
+        self::assertSame(Command::FAILURE, $tester->getStatusCode());
+        self::assertStringContainsString('ont levé une exception', $tester->getDisplay());
+        self::assertStringContainsString(UnguardedPermissionVoter::class, $tester->getDisplay());
+    }
+
+    /**
+     * Et ce qu'il empêche de conclure est dit. Le droit apparaît orphelin parce que le seul
+     * voter qui aurait pu le prendre en charge n'a pas pu répondre : l'écrire sans la réserve
+     * enverrait écrire un voter qui existe déjà.
+     */
+    public function testAnOrphanFoundBesideARaisingVoterIsReportedWithAReservation(): void
+    {
+        $tester = $this->diagnose(
+            ViewInvoiceUseCase::class,
+            InvoiceBook::class,
+            UnguardedPermissionVoter::class,
+        );
+
+        self::assertStringContainsString('fixture.invoice.view', $tester->getDisplay());
+        self::assertStringContainsString('n\'a pas pu être examiné', $tester->getDisplay());
+    }
+
+    /**
+     * Ce que la commande sait dire du contrat « répondre sur un tiers ». Branché, elle en donne
+     * l'adaptateur ; absent, elle en donne la raison — et c'est le seul endroit où l'omission
+     * se voit sans avoir à injecter le service pour s'en apercevoir.
+     */
+    public function testItNamesTheAdapterThatAnswersOnBehalfOfAThirdParty(): void
+    {
+        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
+
+        self::assertStringContainsString(SecurityUserAuthorizer::class, $tester->getDisplay());
     }
 
     /**

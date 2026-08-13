@@ -26,9 +26,18 @@ use Symfony\Component\HttpKernel\Kernel;
  */
 final class AuthorizationTestKernel extends Kernel
 {
-    /** @param list<class-string> $services */
-    public function __construct(private readonly array $services = [])
-    {
+    /**
+     * @param list<class-string>   $services
+     * @param array<string, mixed> $providers les fournisseurs de comptes de l'application. Un seul
+     *                                        par défaut, mais le nombre compte : SecurityExtension
+     *                                        ne pose l'alias `UserProviderInterface` que s'il y en a
+     *                                        exactement un, et ne pose rien du tout s'il n'y en a
+     *                                        aucun
+     */
+    public function __construct(
+        private readonly array $services = [],
+        private readonly array $providers = ['in_memory' => ['memory' => null]],
+    ) {
         // Hors debug : ce mode installe des gestionnaires d'erreurs globaux qu'un processus de
         // test ne doit pas hériter d'un cas au suivant. La compilation du conteneur, seule
         // chose examinée ici, est la même dans les deux modes.
@@ -46,7 +55,14 @@ final class AuthorizationTestKernel extends Kernel
     {
         // Porte les services de base — dont `event_dispatcher` — et se charge en premier :
         // FrameworkBundle s'appuie dessus.
-        yield new ServicesBundle();
+        //
+        // Il n'existe qu'à partir de 8.1. En 7.4, FrameworkBundle porte encore ces services
+        // lui-même : le noyau se monte sans lui, et c'est ce qui permet d'éprouver le paquet
+        // sur les deux branches qu'il déclare soutenir.
+        if (class_exists(ServicesBundle::class)) {
+            yield new ServicesBundle();
+        }
+
         yield new FrameworkBundle();
         yield new SecurityBundle();
         yield new AuthorizationBundle();
@@ -61,14 +77,25 @@ final class AuthorizationTestKernel extends Kernel
             $container->loadFromExtension('framework', [
                 'secret' => 'authorization-bundle',
                 'test' => true,
+                // Posée explicitement parce que la 7.3 déprécie de ne pas le faire : sa valeur
+                // par défaut change en 8.0, et `failOnDeprecation` fait de cet avertissement un
+                // échec. C'est la valeur de la 8.x qui est reprise, pour que les deux branches
+                // soient éprouvées sur le même réglage.
+                'property_info' => ['with_constructor_extractor' => true],
             ]);
 
             // Un pare-feu ouvert suffit : ce qui est éprouvé ici, c'est le câblage de
             // l'adaptateur, pas la décision — que rend un voter de l'application.
-            $container->loadFromExtension('security', [
-                'providers' => ['in_memory' => ['memory' => null]],
-                'firewalls' => ['main' => ['security' => false]],
-            ]);
+            //
+            // `providers` n'est posé que s'il y en a : la clé vide et la clé absente ne sont
+            // pas la même configuration pour SecurityExtension.
+            $security = ['firewalls' => ['main' => ['security' => false]]];
+
+            if ([] !== $this->providers) {
+                $security['providers'] = $this->providers;
+            }
+
+            $container->loadFromExtension('security', $security);
 
             foreach ($this->services as $class) {
                 $container->register($class, $class)
@@ -95,7 +122,13 @@ final class AuthorizationTestKernel extends Kernel
 
     public function getCacheDir(): string
     {
-        return sys_get_temp_dir().'/authorization-bundle/'.substr(md5(implode('|', $this->services)), 0, 12);
+        // La version de Symfony entre dans la clé. Sans elle, une même arborescence éprouvée
+        // successivement sur deux branches relit le conteneur compilé pour l'autre, et la suite
+        // tombe sur une classe qui n'existe pas dans celle qui tourne — un échec qui accuse le
+        // paquet d'une faute qui appartient au cache.
+        $key = md5(implode('|', [Kernel::VERSION, json_encode($this->providers), ...$this->services]));
+
+        return sys_get_temp_dir().'/authorization-bundle/'.substr($key, 0, 12);
     }
 
     public function getLogDir(): string
