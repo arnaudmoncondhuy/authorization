@@ -65,9 +65,15 @@ jobs:
           coverage: none
           tools: composer:v2
 
+      # Un paquet ne verrouille pas ses dépendances — `/composer.lock` est hors du dépôt, et
+      # c'est l'application qui l'installe qui arbitre. Or `composer update` partiel exige un
+      # verrou : il faut donc en produire un avant de redescendre la branche.
+      - name: Produire un verrou
+        run: composer update --no-interaction --no-progress
+
       # `-W` autorise composer à redescendre aussi les dépendances indirectes : sans lui, la
       # résolution échoue sur les paquets que framework-bundle tire en 8.x.
-      - name: Installer sur la branche 7.4
+      - name: Redescendre sur la branche 7.4
         run: >
           composer update --no-interaction --no-progress -W
           "symfony/config:^7.4"
