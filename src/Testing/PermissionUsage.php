@@ -41,6 +41,9 @@ use ArnaudMoncondhuy\Authorization\UseCase;
  *
  * Ce qu'elle ne voit pas : un droit exigé par une valeur calculée plutôt que par son cas
  * écrit en toutes lettres, et une énumération importée sous un autre nom.
+ *
+ * Ce qu'elle ne saute plus en silence : un fichier `.php` dont le chemin n'annonce aucun type
+ * connu. Il est rapporté comme faute, parce qu'un cas d'usage mal logé y échapperait à tout.
  */
 final class PermissionUsage
 {
@@ -52,10 +55,26 @@ final class PermissionUsage
     public static function violationsUnder(string $directory, string $namespacePrefix): array
     {
         $faults = [];
+        $unreadable = [];
 
-        foreach (self::classesUnder($directory, $namespacePrefix) as $class) {
+        foreach (self::classesUnder($directory, $namespacePrefix, $unreadable) as $class) {
             $reflection = new \ReflectionClass($class);
             $declared = $reflection->getAttributes(RequiresPermission::class);
+
+            if ($reflection->isTrait()) {
+                // Le corps d'un trait est déjà lu à travers la classe qui l'emploie :
+                // `ReflectionMethod::getDeclaringClass()` y rend celle qui l'utilise, pas le
+                // trait. Le relire ici accuserait deux fois la même ligne, et la seconde à
+                // tort. Reste l'attribut, qui lui ne se propage pas : posé sur un trait, il
+                // n'est lu par personne — ni par les passes, qui ne voient que des services,
+                // ni par le contrôle ci-dessous, qui interroge la classe.
+                if ([] !== $declared) {
+                    $faults[] = $reflection->getShortName().' déclare un droit sur un trait, où l\'attribut n\'est lu par personne';
+                }
+
+                continue;
+            }
+
             $isUseCase = !$reflection->isInterface() && $reflection->implementsInterface(UseCase::class);
 
             if (!$isUseCase) {
@@ -98,6 +117,11 @@ final class PermissionUsage
                 $faults[] = \sprintf('%s réclame %s sans l\'avoir déclaré', $reflection->getShortName(), $extra);
             }
         }
+
+        // Ajoutées à la fin mais triées avec le reste : un fichier que la lecture n'a pas su
+        // ouvrir est une faute au même titre, et de la pire espèce — c'est celle qui laisse
+        // croire que tout a été regardé.
+        $faults = array_merge($faults, $unreadable);
 
         sort($faults);
 
@@ -232,11 +256,28 @@ final class PermissionUsage
     }
 
     /**
+     * Les types que porte cette arborescence, déduits des chemins selon PSR-4.
+     *
+     * Le fichier est lu avant d'être chargé, et c'est l'ordre qui compte. `class_exists()`
+     * déclenche l'autoloader, qui inclut le fichier que le chemin désigne : sur un fichier qui
+     * ne déclare pas ce que sa place annonce, l'inclusion a bien lieu, la classe n'apparaît
+     * pas, et rien n'empêche de recommencer à l'appel suivant — d'où un « Cannot redeclare »
+     * sur la deuxième lecture d'une même arborescence. Un fichier de script égaré serait, lui,
+     * purement et simplement exécuté par un contrôle censé se contenter de lire.
+     *
+     * On regarde donc d'abord ce que le fichier déclare, et on ne charge que ce qui tient sa
+     * promesse.
+     *
+     * Ce qu'aucun mot-clé ne déclare est rapporté au lieu d'être sauté. Un cas d'usage logé
+     * dans un fichier que sa place ne nomme pas échappait à toute lecture sans une ligne pour
+     * le dire : le seul saut de ce contrôle qui ouvre au lieu de bruiter.
+     *
      * @param non-empty-string $namespacePrefix
+     * @param list<string>     $unreadable      recueille les fichiers dont le chemin ne mène à aucun type
      *
      * @return list<class-string>
      */
-    private static function classesUnder(string $directory, string $namespacePrefix): array
+    private static function classesUnder(string $directory, string $namespacePrefix, array &$unreadable): array
     {
         if (!is_dir($directory)) {
             return [];
@@ -255,13 +296,69 @@ final class PermissionUsage
             /** @var class-string $class */
             $class = $namespacePrefix.str_replace(['/', '.php'], ['\\', ''], $relative);
 
-            if (class_exists($class)) {
+            if (\in_array($class, self::typesDeclaredIn($file->getPathname()), true)) {
                 $classes[] = $class;
+                continue;
             }
+
+            $unreadable[] = \sprintf(
+                '%s n\'a pas été examiné : son chemin annonce %s, que ce fichier ne déclare pas',
+                $relative,
+                $class,
+            );
         }
 
         sort($classes);
 
         return $classes;
+    }
+
+    /**
+     * Les types pleinement qualifiés qu'un fichier déclare, lus sans le charger.
+     *
+     * Les quatre mots-clés sont cherchés, pas seulement `class` : `class_exists()` rend faux
+     * pour une interface comme pour un trait, et s'en remettre à lui écartait en silence tout
+     * ce que ces deux mots déclarent — un attribut posé sur une interface n'était donc lu par
+     * personne. Une énumération, elle, est bien une classe, mais son mot-clé est distinct.
+     *
+     * @return list<class-string>
+     */
+    private static function typesDeclaredIn(string $file): array
+    {
+        $tokens = \PhpToken::tokenize((string) file_get_contents($file));
+        $meaningful = array_values(array_filter(
+            $tokens,
+            static fn (\PhpToken $t): bool => !$t->is([\T_WHITESPACE, \T_COMMENT, \T_DOC_COMMENT]),
+        ));
+
+        $namespace = '';
+        $types = [];
+
+        foreach ($meaningful as $index => $token) {
+            $next = $meaningful[$index + 1] ?? null;
+
+            if ($token->is(\T_NAMESPACE) && null !== $next && $next->is([\T_STRING, \T_NAME_QUALIFIED])) {
+                $namespace = $next->text.'\\';
+                continue;
+            }
+
+            if (!$token->is([\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM])) {
+                continue;
+            }
+
+            // `Foo::class` porte le mot-clé sans rien déclarer, et `new class {}` ne le fait
+            // suivre d'aucun nom.
+            $previous = $meaningful[$index - 1] ?? null;
+
+            if ((null !== $previous && $previous->is(\T_DOUBLE_COLON)) || null === $next || !$next->is(\T_STRING)) {
+                continue;
+            }
+
+            /** @var class-string $declared */
+            $declared = $namespace.$next->text;
+            $types[] = $declared;
+        }
+
+        return $types;
     }
 }

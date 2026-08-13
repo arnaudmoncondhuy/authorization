@@ -54,10 +54,88 @@ final class PermissionUsageTest extends TestCase
             'ComputesItsPermissionUseCase réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses déclarations',
             'DeclaresWithoutDemandingUseCase déclare fixture.invoice.create sans jamais le réclamer',
             'DeclaringController déclare un droit sans être un cas d\'usage',
+            'DeclaringTrait déclare un droit sur un trait, où l\'attribut n\'est lu par personne',
             'DemandsUndeclaredUseCase réclame InvoicePermission::Create sans l\'avoir déclaré',
+            'GovernedByAttribute déclare un droit sans être un cas d\'usage',
             'RequiringController réclame un droit sans être un cas d\'usage',
             'TestsWithoutRequiringUseCase déclare fixture.invoice.view sans jamais le réclamer',
+            'Unscanned/RenamedUseCase.php n\'a pas été examiné : son chemin annonce ArnaudMoncondhuy\Authorization\Tests\Fixture\Unscanned\RenamedUseCase, que ce fichier ne déclare pas',
+            'Unscanned/helpers.php n\'a pas été examiné : son chemin annonce ArnaudMoncondhuy\Authorization\Tests\Fixture\Unscanned\helpers, que ce fichier ne déclare pas',
         ], self::violationsInFixtures());
+    }
+
+    /**
+     * Le saut que rien ne disait. Une classe renommée sans que son fichier suive n'était plus
+     * atteinte par aucune lecture — ni son attribut, ni son corps — tout en portant un verbe
+     * métier. C'est le fichier qui est nommé, et non la classe : la classe, justement, on ne
+     * sait pas qu'elle est là.
+     */
+    public function testAFileThatDoesNotDeclareWhatItsPathAnnouncesIsReported(): void
+    {
+        self::assertContains(
+            'Unscanned/RenamedUseCase.php n\'a pas été examiné : son chemin annonce ArnaudMoncondhuy\Authorization\Tests\Fixture\Unscanned\RenamedUseCase, que ce fichier ne déclare pas',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
+     * Le fichier est lu, jamais chargé, tant qu'il ne tient pas la promesse de son chemin.
+     *
+     * `class_exists()` déclenche l'autoloader, qui inclut le fichier désigné par le chemin.
+     * Sur un fichier qui ne déclare pas la classe attendue, l'inclusion a lieu quand même et
+     * rien n'empêche de la refaire : deux lectures d'une même arborescence dans un seul
+     * processus tombaient sur « Cannot redeclare ». Un script égaré aurait, lui, été exécuté
+     * par un contrôle censé se contenter de lire.
+     */
+    public function testAFileThatDoesNotHoldItsPromiseIsNeverIncluded(): void
+    {
+        self::violationsInFixtures();
+        self::violationsInFixtures();
+
+        self::assertFalse(
+            \function_exists('ArnaudMoncondhuy\\Authorization\\Tests\\Fixture\\Unscanned\\fixtureHelper'),
+            'Le balayage a inclus un fichier dont le chemin ne mène à aucun type.',
+        );
+    }
+
+    /**
+     * Les interfaces entrent désormais dans la lecture. `class_exists()` rend faux pour une
+     * interface : tant que le balayage s'en remettait à lui, un attribut posé là n'était lu par
+     * personne — ni par les passes, qui ne jugent que des services, ni par ce contrôle, qui ne
+     * l'atteignait pas.
+     */
+    public function testAnInterfaceCarryingTheAttributeIsSeen(): void
+    {
+        self::assertContains(
+            'GovernedByAttribute déclare un droit sans être un cas d\'usage',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
+     * Un attribut posé sur un trait est inerte : `getAttributes()` sur la classe qui l'emploie
+     * ne le rend pas. Le droit n'entre donc dans aucun inventaire et le verbe se ferme pour
+     * tout le monde, sans qu'une seule erreur soit levée.
+     */
+    public function testAnAttributeOnATraitIsNamedForBeingInert(): void
+    {
+        self::assertContains(
+            'DeclaringTrait déclare un droit sur un trait, où l\'attribut n\'est lu par personne',
+            self::violationsInFixtures(),
+        );
+    }
+
+    /**
+     * Le corps d'un trait n'est pas relu pour lui-même : ses méthodes sont déjà lues à travers
+     * la classe qui les emploie, où `getDeclaringClass()` les rattache. L'accuser une seconde
+     * fois nommerait la même ligne deux fois, et la seconde à tort.
+     */
+    public function testATraitBodyIsNotJudgedTwice(): void
+    {
+        self::assertNotContains(
+            'DeclaringTrait réclame un droit sans être un cas d\'usage',
+            self::violationsInFixtures(),
+        );
     }
 
     /**
