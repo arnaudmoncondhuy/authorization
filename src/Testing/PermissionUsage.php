@@ -248,10 +248,6 @@ final class PermissionUsage
     /** Tel qu'un corps l'écrit : le nom court de l'énumération et celui du cas. */
     private static function asWritten(Permission $permission): string
     {
-        if (!$permission instanceof \UnitEnum) {
-            return $permission::class;
-        }
-
         return new \ReflectionClass($permission)->getShortName().'::'.$permission->name;
     }
 

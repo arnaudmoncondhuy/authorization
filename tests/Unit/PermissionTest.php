@@ -48,6 +48,16 @@ final class PermissionTest extends TestCase
     }
 
     /**
+     * Le contrat n'accepte que des énumérations : c'est le langage qui arrête une classe
+     * ordinaire, à la ligne où elle se déclare. Ce test garde l'héritage qui porte cette
+     * garantie — et avec elle l'inventaire que le conteneur compilé sait conserver.
+     */
+    public function testOnlyAnEnumerationCanCarryAPermission(): void
+    {
+        self::assertTrue(new \ReflectionClass(Permission::class)->implementsInterface(\UnitEnum::class));
+    }
+
+    /**
      * Reçoit le contrat et non l'énumération : ce qui passe ici passerait à n'importe quel
      * cas d'usage.
      */

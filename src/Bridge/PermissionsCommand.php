@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\CallsNoUseCase;
+use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -58,10 +59,8 @@ final class PermissionsCommand extends Command
      * D'où vient l'identité, pour qu'on sache où la changer — et pour que deux contextes de
      * même nom court restent distinguables.
      */
-    private static function declaredBy(object $permission): string
+    private static function declaredBy(Permission $permission): string
     {
-        return $permission instanceof \UnitEnum
-            ? $permission::class.'::'.$permission->name
-            : $permission::class;
+        return $permission::class.'::'.$permission->name;
     }
 }

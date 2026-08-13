@@ -71,8 +71,6 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
 
     private static function name(Permission $permission): string
     {
-        return $permission instanceof \UnitEnum
-            ? $permission::class.'::'.$permission->name
-            : $permission::class;
+        return $permission::class.'::'.$permission->name;
     }
 }

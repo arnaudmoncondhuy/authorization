@@ -23,8 +23,13 @@ namespace ArnaudMoncondhuy\Authorization;
  *             return $this->value;
  *         }
  *     }
+ *
+ * Et par énumération seulement : le contrat étend `\UnitEnum`, qui est du langage et non une
+ * dépendance, et une classe ordinaire qui l'implémenterait est arrêtée par PHP à la ligne où
+ * elle se déclare. Un droit est un nom, pas un état — et c'est aussi ce qui permet au
+ * conteneur compilé de conserver l'inventaire tel quel.
  */
-interface Permission
+interface Permission extends \UnitEnum
 {
     /**
      * Préfixée par son contexte : deux contextes qui choisiraient la même identité
