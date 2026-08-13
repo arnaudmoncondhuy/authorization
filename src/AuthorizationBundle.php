@@ -68,13 +68,19 @@ final class AuthorizationBundle extends AbstractBundle
         /** @var array<string, class-string> $bundles */
         $bundles = $container->getParameter('kernel.bundles');
 
+        // L'inventaire ne réclame que le catalogue, présent partout : une application sans
+        // pare-feu garde le droit de savoir ce que son code exige.
+        if (class_exists(Command::class)) {
+            $configurator->import('../config/console.php');
+        }
+
         if (isset($bundles['SecurityBundle'])) {
             $configurator->import('../config/security.php');
 
-            // Les deux commandes interrogent le contrôle d'accès : sans pare-feu, elles
-            // n'auraient rien à examiner.
+            // Le docteur, lui, interroge le contrôle d'accès : sans pare-feu, il n'aurait
+            // rien à examiner.
             if (class_exists(Command::class)) {
-                $configurator->import('../config/console.php');
+                $configurator->import('../config/doctor.php');
             }
         }
 

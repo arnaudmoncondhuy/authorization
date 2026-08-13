@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Integration;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
+use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
+use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
@@ -22,6 +24,7 @@ use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
+use Symfony\Component\Console\Tester\CommandTester;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -172,6 +175,29 @@ final class BundleWiringTest extends TestCase
 
         self::assertTrue($console->has('authorization:permissions'));
         self::assertTrue($console->has('authorization:doctor'));
+    }
+
+    /**
+     * L'application « sans pare-feu » que le paquet dit servir garde son inventaire : la
+     * commande ne réclame que le catalogue, présent partout. Le docteur, lui, interroge le
+     * contrôle d'accès et disparaît avec lui.
+     */
+    public function testTheInventorySurvivesWithoutTheSecurityBundle(): void
+    {
+        $this->kernel = new AuthorizationTestKernel(security: false);
+        $this->kernel->boot();
+
+        $container = $this->kernel->getContainer()->get('test.service_container');
+        self::assertInstanceOf(ContainerInterface::class, $container);
+
+        $command = $container->get(PermissionsCommand::class);
+        self::assertInstanceOf(PermissionsCommand::class, $command);
+        self::assertFalse($container->has(DoctorCommand::class));
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        self::assertStringContainsString('Aucun droit déclaré', $tester->getDisplay());
     }
 
     /**

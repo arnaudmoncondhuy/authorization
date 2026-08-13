@@ -33,10 +33,15 @@ final class AuthorizationTestKernel extends Kernel
      *                                        ne pose l'alias `UserProviderInterface` que s'il y en a
      *                                        exactement un, et ne pose rien du tout s'il n'y en a
      *                                        aucun
+     * @param bool                 $security  faux pour l'application « sans pare-feu » que le paquet
+     *                                        dit servir : SecurityBundle n'est alors pas enregistré
+     *                                        du tout, ce qui n'est pas la même chose qu'un pare-feu
+     *                                        ouvert
      */
     public function __construct(
         private readonly array $services = [],
         private readonly array $providers = ['in_memory' => ['memory' => null]],
+        private readonly bool $security = true,
     ) {
         // Hors debug : ce mode installe des gestionnaires d'erreurs globaux qu'un processus de
         // test ne doit pas hériter d'un cas au suivant. La compilation du conteneur, seule
@@ -64,7 +69,11 @@ final class AuthorizationTestKernel extends Kernel
         }
 
         yield new FrameworkBundle();
-        yield new SecurityBundle();
+
+        if ($this->security) {
+            yield new SecurityBundle();
+        }
+
         yield new AuthorizationBundle();
     }
 
@@ -89,13 +98,15 @@ final class AuthorizationTestKernel extends Kernel
             //
             // `providers` n'est posé que s'il y en a : la clé vide et la clé absente ne sont
             // pas la même configuration pour SecurityExtension.
-            $security = ['firewalls' => ['main' => ['security' => false]]];
+            if ($this->security) {
+                $security = ['firewalls' => ['main' => ['security' => false]]];
 
-            if ([] !== $this->providers) {
-                $security['providers'] = $this->providers;
+                if ([] !== $this->providers) {
+                    $security['providers'] = $this->providers;
+                }
+
+                $container->loadFromExtension('security', $security);
             }
-
-            $container->loadFromExtension('security', $security);
 
             foreach ($this->services as $class) {
                 $container->register($class, $class)
@@ -126,7 +137,7 @@ final class AuthorizationTestKernel extends Kernel
         // successivement sur deux branches relit le conteneur compilé pour l'autre, et la suite
         // tombe sur une classe qui n'existe pas dans celle qui tourne — un échec qui accuse le
         // paquet d'une faute qui appartient au cache.
-        $key = md5(implode('|', [Kernel::VERSION, json_encode($this->providers), ...$this->services]));
+        $key = md5(implode('|', [Kernel::VERSION, json_encode($this->providers), $this->security ? 'security' : 'bare', ...$this->services]));
 
         return sys_get_temp_dir().'/authorization-bundle/'.substr($key, 0, 12);
     }
