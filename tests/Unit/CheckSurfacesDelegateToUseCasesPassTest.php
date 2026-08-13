@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 use ArnaudMoncondhuy\Authorization\CallsNoUseCase;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckSurfacesDelegateToUseCasesPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\Tag;
+use ArnaudMoncondhuy\Authorization\UseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DelegatingController;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DirectController;
@@ -41,6 +42,41 @@ final class CheckSurfacesDelegateToUseCasesPassTest extends TestCase
         new CheckSurfacesDelegateToUseCasesPass()->process($container);
 
         self::assertTrue($container->hasDefinition(DelegatingController::class));
+    }
+
+    /**
+     * Un verbe reçu par une abstraction de l'application : c'est ce que le conteneur injecte
+     * pour ce type qui en décide, et l'alias désigne bien un cas d'usage.
+     */
+    public function testAVerbReceivedThroughAnAliasedAbstractionIsSeen(): void
+    {
+        $container = new ContainerBuilder();
+        $container->register(FinalizingUseCase::class, FinalizingUseCase::class)->addTag(Tag::USE_CASE);
+        $container->setAlias(FinalizeInvoice::class, FinalizingUseCase::class);
+        $container->register(AliasReceivingController::class, AliasReceivingController::class)
+            ->addTag('controller.service_arguments');
+
+        new CheckSurfacesDelegateToUseCasesPass()->process($container);
+
+        self::assertTrue($container->hasDefinition(AliasReceivingController::class));
+    }
+
+    /**
+     * Un supertype partagé n'est pas un verbe reçu. Un cas d'usage implémente `\Stringable`
+     * quelque part ; une porte qui reçoit `\Stringable` n'en reçoit pas un verbe pour autant,
+     * puisque le conteneur n'injecte rien pour ce type-là.
+     */
+    public function testASharedSupertypeDoesNotCountAsAVerb(): void
+    {
+        $container = new ContainerBuilder();
+        $container->register(SluggedUseCase::class, SluggedUseCase::class)->addTag(Tag::USE_CASE);
+        $container->register(StringReceivingController::class, StringReceivingController::class)
+            ->addTag('controller.service_arguments');
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageMatches('/StringReceivingController/');
+
+        new CheckSurfacesDelegateToUseCasesPass()->process($container);
     }
 
     /**
@@ -144,6 +180,67 @@ final class RedirectingController
     public function __invoke(): string
     {
         return '/';
+    }
+}
+
+/**
+ * Le verbe tel qu'une porte le nomme : une abstraction de l'application, que le conteneur
+ * rapporte au cas d'usage par un alias.
+ */
+interface FinalizeInvoice
+{
+    public function __invoke(string $number): void;
+}
+
+/**
+ * Le cas d'usage derrière l'abstraction.
+ */
+final class FinalizingUseCase implements UseCase, FinalizeInvoice
+{
+    public function __invoke(string $number): void
+    {
+    }
+}
+
+/**
+ * Une porte qui reçoit le verbe sous le nom de l'abstraction, pas de la classe.
+ */
+final readonly class AliasReceivingController
+{
+    public function __construct(private FinalizeInvoice $finalize)
+    {
+    }
+
+    public function __invoke(string $number): void
+    {
+        ($this->finalize)($number);
+    }
+}
+
+/**
+ * Un cas d'usage qui, par ailleurs, sait s'écrire — et partage donc un supertype avec tout ce
+ * qui le sait aussi.
+ */
+final class SluggedUseCase implements UseCase, \Stringable
+{
+    public function __invoke(string $number): void
+    {
+    }
+
+    public function __toString(): string
+    {
+        return 'facture';
+    }
+}
+
+/**
+ * Une porte qui reçoit une chaîne affichable, et rien d'autre.
+ */
+final class StringReceivingController
+{
+    public function __invoke(\Stringable $slug): string
+    {
+        return (string) $slug;
     }
 }
 

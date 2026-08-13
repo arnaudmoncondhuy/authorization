@@ -47,7 +47,6 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
 
     public function process(ContainerBuilder $container): void
     {
-        $useCases = $this->useCaseClasses($container);
         $undelegated = [];
 
         foreach ($this->surfaceTagsOf($container) as $tag) {
@@ -67,7 +66,7 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
                     continue;
                 }
 
-                if (!self::reachesAUseCase($reflection, $useCases)) {
+                if (!self::reachesAUseCase($reflection, $container)) {
                     $undelegated[] = $reflection->getName();
                 }
             }
@@ -138,10 +137,14 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
      * Un verbe atteint par le constructeur, ou par un argument de méthode — Symfony injecte
      * les deux dans un contrôleur.
      *
+     * Un type qui n'implémente pas le contrat est jugé sur ce que le conteneur injecte pour
+     * lui, jamais sur la signature seule : l'alias d'une interface maison désigne un cas
+     * d'usage, `\Stringable` ne désigne rien — même si un cas d'usage l'implémente quelque
+     * part. Un supertype partagé n'est pas un verbe reçu.
+     *
      * @param \ReflectionClass<object> $reflection
-     * @param list<class-string>       $useCases
      */
-    private static function reachesAUseCase(\ReflectionClass $reflection, array $useCases): bool
+    private static function reachesAUseCase(\ReflectionClass $reflection, ContainerBuilder $container): bool
     {
         $parameters = $reflection->getConstructor()?->getParameters() ?? [];
 
@@ -162,31 +165,27 @@ final readonly class CheckSurfacesDelegateToUseCasesPass implements CompilerPass
                 return true;
             }
 
-            // Un cas d'usage reçu par une classe parente ou une interface qu'il implémente.
-            foreach ($useCases as $useCase) {
-                if (is_a($useCase, $named, true)) {
-                    return true;
-                }
+            if (self::theContainerInjectsAUseCaseFor($container, $named)) {
+                return true;
             }
         }
 
         return false;
     }
 
-    /** @return list<class-string> */
-    private function useCaseClasses(ContainerBuilder $container): array
+    /**
+     * Ce que l'autowiring livrerait pour ce type : le service ou l'alias qui porte son nom.
+     * S'il désigne un cas d'usage, la porte reçoit bien un verbe par cette abstraction.
+     */
+    private static function theContainerInjectsAUseCaseFor(ContainerBuilder $container, string $type): bool
     {
-        $classes = [];
-
-        foreach (array_keys($container->findTaggedServiceIds(Tag::USE_CASE)) as $service) {
-            $class = $container->findDefinition($service)->getClass() ?? $service;
-            $reflection = $container->getReflectionClass($class, false);
-
-            if ($reflection instanceof \ReflectionClass && $reflection->implementsInterface(UseCase::class)) {
-                $classes[] = $reflection->getName();
-            }
+        if (!$container->has($type)) {
+            return false;
         }
 
-        return array_values(array_unique($classes));
+        $class = $container->findDefinition($type)->getClass() ?? $type;
+        $reflection = $container->getReflectionClass($class, false);
+
+        return $reflection instanceof \ReflectionClass && $reflection->implementsInterface(UseCase::class);
     }
 }
