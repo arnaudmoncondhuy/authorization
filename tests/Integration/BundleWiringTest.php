@@ -15,6 +15,8 @@ use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\UndeclaredUseCa
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Stock\AdjustStockUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DeclaringController;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DelegatingController;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Web\DirectController;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use PHPUnit\Framework\TestCase;
@@ -36,11 +38,11 @@ final class BundleWiringTest extends TestCase
 
     /**
      * LE test du dispositif. Il devient rouge si `registerForAutoconfiguration()` disparaît de
-     * la classe de bundle, si l'une des passes cesse d'être enregistrée, ou si les passes se
-     * mettent à tourner avant que l'autoconfiguration ne soit résolue.
+     * la classe de bundle, si la passe des déclarations cesse d'être enregistrée, ou si les
+     * passes se mettent à tourner avant que l'autoconfiguration ne soit résolue.
      *
-     * Dans les trois cas, tous les autres contrôles resteraient verts et ne vérifieraient plus
-     * rien.
+     * Chaque passe a son témoin dans cette suite : les contrôles unitaires bâtissent leur
+     * conteneur à la main et resteraient verts sur un bundle qui n'enregistrerait plus rien.
      */
     public function testAUseCaseWithoutPermissionStopsTheCompilation(): void
     {
@@ -59,6 +61,31 @@ final class BundleWiringTest extends TestCase
         $this->expectExceptionMessageMatches('/DeclaringController/');
 
         $this->boot(DeclaringController::class);
+    }
+
+    /**
+     * La quatrième garantie, branchée : une porte que Symfony marque contrôleur et qui écrit
+     * dans le dépôt sans atteindre aucun verbe arrête le démarrage. C'est le seul témoin de
+     * l'enregistrement de la passe des surfaces — les contrôles unitaires l'instancient à la
+     * main et resteraient verts si le bundle ne l'enregistrait plus.
+     */
+    public function testASurfaceThatCallsNoUseCaseStopsTheCompilation(): void
+    {
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessageMatches('/DirectController/');
+
+        $this->boot(DirectController::class, InvoiceBook::class);
+    }
+
+    /**
+     * L'autre face du même contrôle : une porte qui délègue démarre. Sans ce témoin, un
+     * examen devenu trop large refuserait des applications saines sans qu'aucun test rougisse.
+     */
+    public function testASurfaceThatDelegatesBoots(): void
+    {
+        $container = $this->boot(DelegatingController::class, ViewInvoiceUseCase::class, InvoiceBook::class);
+
+        self::assertInstanceOf(DelegatingController::class, $container->get(DelegatingController::class));
     }
 
     /**
