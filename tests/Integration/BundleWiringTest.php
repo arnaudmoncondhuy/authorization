@@ -21,6 +21,7 @@ use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\DependencyInjection\Exception\LogicException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 use Symfony\Component\HttpKernel\KernelEvents;
@@ -155,6 +156,22 @@ final class BundleWiringTest extends TestCase
         $container = $this->boot(ViewInvoiceUseCase::class, InvoiceBook::class);
 
         self::assertInstanceOf(SecurityUserAuthorizer::class, $container->get(UserAuthorizer::class));
+    }
+
+    /**
+     * Les deux commandes sont atteignables par la console, et pas seulement inscrites au
+     * conteneur : un service qui perdrait son tag resterait déclaré sans apparaître dans aucun
+     * `bin/console`.
+     */
+    public function testTheCommandsAreReachableFromTheConsole(): void
+    {
+        $this->boot(ViewInvoiceUseCase::class, InvoiceBook::class);
+        self::assertNotNull($this->kernel);
+
+        $console = new Application($this->kernel);
+
+        self::assertTrue($console->has('authorization:permissions'));
+        self::assertTrue($console->has('authorization:doctor'));
     }
 
     /**
