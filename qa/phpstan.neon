@@ -2,9 +2,13 @@ parameters:
     # Le niveau 9 ajoute le typage strict de `mixed`, que peu de code annote.
     level: 8
 
+    # `config/` y figure : ces trois fichiers câblent les services du paquet, et rien ne les
+    # lisait. Une faute de frappe sur un nom de service ou un argument de trop n'y aurait été
+    # découverte qu'au démarrage d'une application.
     paths:
         - ../src
         - ../tests
+        - ../config
 
     excludePaths:
         - ../vendor/*

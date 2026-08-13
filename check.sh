@@ -56,7 +56,7 @@ fi
 
 # ── 2. Fonctions de mise au point oubliées ─────────────────────────────────────────────────
 echo -e "\n${YELLOW}Étape 2 : détection des fonctions de debug…${NC}"
-DEBUG_PHP=$(grep -rE "(^|[^a-zA-Z_>])(var_dump|dump|dd)\(" src tests \
+DEBUG_PHP=$(grep -rE "(^|[^a-zA-Z_>])(var_dump|dump|dd)\(" src tests config \
     --include="*.php" 2>/dev/null || true)
 
 if [ -z "$DEBUG_PHP" ]; then
