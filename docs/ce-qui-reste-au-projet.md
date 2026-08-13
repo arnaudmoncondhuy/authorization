@@ -60,4 +60,4 @@ d'atteindre la base sans passer par un cas d'usage** ; **couper la résolution i
 d'entités depuis les arguments de contrôleur** (`doctrine.orm.controller_resolver.enabled:
 false`), qui charge une table sans qu'aucun droit ne soit réclamé ; **surveiller
 `autoconfigure: false`**, seule façon de soustraire un service au tag posé par le bundle, donc
-aux trois contrôles.
+aux trois contrôles de déclaration.

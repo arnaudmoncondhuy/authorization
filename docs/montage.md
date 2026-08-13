@@ -35,6 +35,10 @@ enum InvoicePermission: string implements Permission
 }
 ```
 
+**Une énumération, et rien d'autre.** Le contrat étend `\UnitEnum` : une classe ordinaire qui
+l'implémenterait est arrêtée par PHP à la ligne où elle se déclare. Un droit est un nom, pas
+un état — et c'est ce qui permet au conteneur compilé de conserver l'inventaire tel quel.
+
 **Préfixez l'identité par son contexte.** Deux contextes qui choisiraient `view` désigneraient
 le même droit, et le partageraient — le paquet refuse de compiler dans ce cas, mais autant ne
 pas s'y exposer.
@@ -146,7 +150,7 @@ rien n'applique ; un droit **réclamé et jamais déclaré** n'entre dans aucun 
 être accordé à personne, et ferme le verbe pour tout le monde — administrateur compris.
 
 Il attrape aussi la brèche signalée plus haut : **une classe qui réclame un droit sans être un
-cas d'usage**. Les trois refus de compilation ne la voient pas, puisqu'elle n'implémente pas
+cas d'usage**. Les trois premiers refus de compilation ne la voient pas, puisqu'elle n'implémente pas
 `UseCase`.
 
 **La forme qu'il reconnaît, et elle contraint votre écriture :** il cherche
@@ -156,8 +160,8 @@ cas d'usage**. Les trois refus de compilation ne la voient pas, puisqu'elle n'im
 $this->access->require(InvoicePermission::Finalize);   // vu
 
 $permission = InvoicePermission::Finalize;
-$this->access->require($permission);                   // PAS vu : le droit déclaré
-                                                       // sera signalé jamais réclamé
+$this->access->require($permission);                   // signalé : « réclame un droit
+                                                       // par une valeur », illisible
 ```
 
 Ce n'est pas une négligence : c'est ce qui rend le contrôle sûr. Chercher le nom du droit

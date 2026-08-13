@@ -36,7 +36,7 @@ use ArnaudMoncondhuy\Authorization\UseCase;
  *
  * Sur tout le reste, la lecture porte sur le fichier entier, et cherche une seule chose : un
  * droit réclamé hors d'un cas d'usage. C'est ce qui rattrape la faiblesse des trois contrôles
- * de compilation, qui ne jugent que ce qui implémente {@see UseCase} — une classe qui oublie
+ * de déclaration, qui ne jugent que ce qui implémente {@see UseCase} — une classe qui oublie
  * l'interface leur échappe tout en portant du métier gouverné par rien.
  *
  * Ce qu'elle ne voit pas : un droit exigé par une valeur calculée plutôt que par son cas

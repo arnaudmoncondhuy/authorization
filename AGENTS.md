@@ -48,11 +48,13 @@ d'aujourd'hui, doit rester exact et utile. S'il ne l'est pas, il ne doit pas exi
 
 ## Ce que ce paquet promet, et ce qu'il ne promet pas
 
-Il tient **trois règles**, et chacune arrête la compilation du conteneur :
+Il tient **quatre règles**, et chacune arrête la compilation du conteneur :
 
 1. tout cas d'usage déclare au moins un droit ;
 2. nul autre qu'un cas d'usage n'en déclare ;
-3. deux droits distincts ne partagent jamais une identité.
+3. deux droits distincts ne partagent jamais une identité ;
+4. toute porte d'entrée reçoit un verbe métier — la quatrième juge ce qu'une porte reçoit,
+   pas ce qu'elle en fait, et le README la décrit à ce niveau-là.
 
 Il **ne décide rien**. Savoir si l'utilisateur courant détient `invoice.finalize` reste
 l'affaire d'un voter écrit par l'application. Ce paquet garantit seulement qu'aucune surface
@@ -69,7 +71,7 @@ est la description exécutable.
 
 - **racine `src/`** — le contrat. PHP nu, aucune dépendance, pas même le framework. C'est ce
   qu'une application importe dans son domaine.
-- **`DependencyInjection/`** — les quatre passes et le nom du tag. Connaît
+- **`DependencyInjection/`** — les cinq passes et le nom du tag. Connaît
   `symfony/dependency-injection`, et rien d'autre — pas même `Bridge/` : la passe qui juge
   l'adaptateur « tiers » part de l'alias du contrat et traite ce qu'il désigne.
 - **`Bridge/`** — les adaptateurs, nommés par le fournisseur qu'ils branchent. Une application

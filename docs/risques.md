@@ -36,11 +36,11 @@ d'authentification. Vérifié.
 **6. Il n'y a pas d'auto-remédiation.** Aucune commande n'accorde, ne révoque, ne migre une
 identité renommée. Ce que vous cassez, vous le réparez.
 
-**7. `PermissionUsage` ne lit que ce qui est écrit en toutes lettres.** Ni un droit choisi
-par une variable, ni une énumération importée sous un autre nom. Ce sont ses limites déclarées,
-et elles se paient (§ C.8).
+**7. `PermissionUsage` ne lit que ce qui est écrit en toutes lettres.** Un droit choisi par
+une variable est signalé pour ce qu'il est — illisible — plutôt que lu, et une énumération
+importée sous un autre nom lui échappe sans un mot. Ce sont ses limites déclarées (§ C.8, § 8).
 
-**8. Les trois contrôles de compilation ne jugent que ce qui implémente `UseCase`.** Une
+**8. Les trois contrôles de déclaration ne jugent que ce qui implémente `UseCase`.** Une
 classe qui oublie l'interface, ou un service soustrait à l'autoconfiguration, leur échappe
 entièrement (§ C.6, § C.7).
 
@@ -151,27 +151,21 @@ mauvais sens.
   **accordé** ce que le modèle prévu refuse.
 
 La stratégie par défaut de Symfony est `affirmative` : un seul avis favorable suffit. Deux
-voters qui se recouvrent **élargissent** donc les droits, ils ne les restreignent pas. Et rien
-ne le dit : ni le docteur, ni les tests, ni l'analyse statique.
+voters qui se recouvrent **élargissent** donc les droits, ils ne les restreignent pas. Ni les
+tests ni l'analyse statique ne le voient — le docteur, seul, le dit.
 
 **Comment l'éviter.** Ne recopiez pas un préfixe dans chaque `supports()`. Faites dépendre les
 trois `supports()` d'une seule répartition, écrite dans le domaine (§ A.9) : la disjonction
 devient une propriété du code, pas une consigne.
 
-**Le docteur ? Il pourrait le détecter, et c'est le contrôle le plus rentable de la liste.**
-Il a déjà, dans le constructeur, le catalogue **et** l'itérable de tous les voters. Il lui
-suffirait, pour chaque droit, de **compter** les voters qui ne s'abstiennent pas au lieu de
-s'arrêter au premier :
+**Le docteur ? Il le détecte déjà.** Il **compte** les voters qui se prononcent sur chaque
+droit au lieu de s'arrêter au premier : zéro juge est l'erreur qu'il rend depuis toujours,
+deux et plus est signalé — nommément, voter par voter. Un recouvrement n'étant pas toujours
+une faute — un voter qui ouvre tout à une poignée d'administrateurs en est un usage légitime —
+le signalement ne fait échouer l'examen que sous `--strict`.
 
-```php
-$judges = array_filter($this->registeredVoters(), fn ($v) => VoterInterface::ACCESS_ABSTAIN !== $v->vote($nobody, null, [$id]));
-
-// 0 juge  → l'erreur qu'il rend déjà.
-// 2 juges et plus → avertissement : sous la stratégie « affirmative », le plus permissif gagne.
-```
-
-Il gagnerait aussi à afficher la stratégie en tête de son rapport, à côté du contrat et du
-nombre de voters : c'est une ligne, et elle change l'interprétation de tout le reste.
+Il gagnerait encore à afficher la stratégie en tête de son rapport, à côté du contrat et du
+nombre de voters : c'est une ligne, et elle change l'interprétation de tout le reste (§ C.14).
 
 ---
 
@@ -231,7 +225,7 @@ explicitement**, comme dans l'exemple du § A.3, et le problème n'existe pas.
 ### 6. Un service soustrait à l'autoconfiguration
 
 **Ce qui casse.** `autoconfigure: false` retire le tag que le bundle pose. Les trois contrôles
-de compilation ne voient plus le service — tout en le laissant parfaitement injectable.
+de déclaration ne voient plus le service — tout en le laissant parfaitement injectable.
 
 **Comment ça se manifeste. Pas du tout, du côté du paquet.** Vérifié : un cas d'usage sans
 aucun `#[RequiresPermission]`, déclaré avec `autoconfigure: false`, laisse le conteneur
@@ -274,23 +268,23 @@ cette garantie.
 
 ### 8. Un droit choisi par une variable
 
-**Ce qui casse.** Deux cas, et le second est vicieux.
+**Ce qui casse.** Un corps qui écrit `require($permission)` réclame peut-être exactement ce
+qu'il déclare — mais aucune lecture de texte ne sait le dire, et un droit réclamé par variable
+sans être déclaré fermerait le verbe à tout le monde sans qu'aucun inventaire le propose.
 
-- **Déclaré, réclamé par variable** : `PermissionUsage` rend « déclare X sans jamais le
-  réclamer ». Vérifié. C'est un test rouge, donc **visible**.
-- **Réclamé par variable et jamais déclaré** : le corps exige un droit que l'attribut ne dit
-  pas, et le contrôle ne voit **aucune** identité littérale à rapprocher. Vérifié : tests
-  verts, docteur vert, et le verbe est refusé à qui devrait pouvoir s'en servir. **Silencieux**,
-  et fermant.
+**Comment ça se manifeste.** `PermissionUsage` signale tout `->require(` suivi d'une valeur :
+« réclame un droit par une valeur, que ce contrôle ne sait pas rapprocher de ses
+déclarations ». Le test est rouge, la faute est nommée pour ce qu'elle est — illisible — et
+l'examen s'arrête là pour cette classe : accuser en plus le droit déclaré de n'être « jamais
+réclamé » serait peut-être faux, et enverrait chercher au mauvais endroit.
 
 **Comment l'éviter.** Écrivez le cas en toutes lettres, toujours. C'est aussi ce qui rend le
 corps lisible.
 
-**Le docteur ? Il ne peut pas** — pas de lecture de corps. `PermissionUsage`, lui, ne le peut
-pas non plus sans changer de nature : distinguer `require($x)` d'un appel légitime demanderait
-de résoudre `$x`, donc d'analyser le flot. Ce qu'il **pourrait** faire à peu de frais, c'est
-signaler tout `->require(` qui n'est pas suivi d'une constante d'énumération — un avertissement
-« droit réclamé par une valeur que je ne sais pas lire », qui vaut mieux que le silence actuel.
+**Le docteur ? Il ne peut pas** — pas de lecture de corps. `PermissionUsage` ne peut pas
+davantage **lire** la valeur : distinguer `require($x)` d'un appel légitime demanderait de
+résoudre `$x`, donc d'analyser le flot. Il la **signale**, et c'est le niveau juste : un
+avertissement qui contraint l'écriture vaut mieux qu'un silence qui ferme.
 
 ---
 
@@ -359,6 +353,38 @@ Toute route qui appelle `dispatch()` appelle d'abord `require()`.
 `PermissionUsage` lit les corps de méthode et y cherche l'appel. Le même mécanisme, appliqué
 aux méthodes d'une surface, dirait « cette route poste un message sans qu'aucun droit soit
 réclamé ». Ce n'est pas écrit, et c'est le premier contrôle à ajouter.
+
+---
+
+### 10 ter. Une porte que la passe croit servie, ou qu'elle ne voit pas
+
+**Ce qui casse.** Deux formes, cousines de la précédente.
+
+- **Le verbe reçu jamais appelé.** La passe juge ce qu'une porte **reçoit** — son
+  constructeur, ses méthodes publiques, ce que le conteneur injecte pour chaque type. Un
+  contrôleur qui injecte un cas d'usage et écrit à côté, directement dans le dépôt, passe au
+  vert : la réception n'est pas l'appel, et aucune lecture de signatures ne fera la
+  différence.
+- **La porte que Symfony ne marque pas.** La passe examine les tags que le framework pose de
+  lui-même — contrôleurs, commandes, consommateurs de messages. Or ce marquage est un opt-in :
+  un contrôleur routé en YAML qui n'étend pas `AbstractController` et ne porte ni
+  `#[AsController]` ni `#[Route]` n'est jamais tagué, donc jamais examiné. Un écouteur
+  d'événement qui agit sur `kernel.request` est une porte au même titre, et son tag n'est pas
+  dans la liste.
+
+**Comment ça se manifeste. Pas du tout.** C'est le propre des deux formes : la première passe
+au vert, la seconde n'est pas regardée.
+
+**Comment l'éviter.** Pour la première : la règle 1 de [ce qui reste au
+projet](ce-qui-reste-au-projet.md), encore elle — réclamer le droit là où la demande est
+acceptée. Pour la seconde : router sur des contrôleurs que Symfony marque — l'attribut coûte
+une ligne — et déclarer dans `authorization.surface_tags` les tags de vos portes d'un autre
+genre : écouteurs qui agissent, outils d'assistant, points d'entrée JSON-RPC.
+
+**Le docteur ? Il ne peut pas, et la passe non plus** — pas sans lire les corps pour la
+première forme, pas sans liste tenue pour la seconde. C'est le niveau réel de la quatrième
+règle, et le README la décrit à ce niveau : un garde-fou contre l'oubli du dispositif, pas une
+preuve que chaque porte traverse un verbe.
 
 ---
 
@@ -524,14 +550,14 @@ Résumé de la section C, dans l'ordre du rapport bénéfice / coût.
 
 | # | Contrôle | Verdict |
 |---|---|---|
-| C.3 | compter les voters qui jugent chaque droit, avertir au-delà de un | pourrait — il a déjà catalogue et voters en main |
+| C.3 | compter les voters qui jugent chaque droit, avertir au-delà de un | **le fait déjà** — signalé par défaut, échec sous `--strict` |
 | C.14 | afficher la stratégie de décision en tête du rapport | pourrait — une ligne |
 | C.11 | attraper l'exception d'un voter et la rapporter au lieu de la laisser fuir | **le fait déjà** |
 | C.6 | signaler une classe qui implémente `UseCase` sans porter le tag | pourrait — mieux encore dans la passe de compilation |
 | C.1 | confronter les identités stockées au catalogue | pourrait, si l'application lui fournit ses identités stockées |
 | C.5 | un droit qu'aucun voter ne prend en charge | **détecte déjà** |
 | C.2 | `require()` en tête de corps | pas le docteur — mais `PermissionUsage` le pourrait |
-| C.8 | `require()` sur une valeur que rien ne sait lire | pas le docteur — mais `PermissionUsage` pourrait avertir |
+| C.8 | `require()` sur une valeur que rien ne sait lire | pas le docteur — mais `PermissionUsage` **le signale déjà**, sans prétendre le lire |
 | C.4, C.13 | droit sans modèle, droit accordé sous le mauvais modèle | ne peut pas — notion de l'application |
 | C.12 | intégrité d'un regroupement de droits | ne peut pas — notion de l'application |
 | C.7, C.9 | droit réclamé hors d'un cas d'usage, `can()` sans `require()` | ne peut pas — demande de lire des corps ; `PermissionUsage` le fait |

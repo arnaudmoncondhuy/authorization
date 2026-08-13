@@ -38,12 +38,18 @@ poste de qui a écrit la faute.
 | Tout cas d'usage déclare au moins un droit | un verbe qui s'exécute sans arbitrage, et qu'on ne peut accorder à personne |
 | Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
 | Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre — la collision se juge sur la valeur, donc entre deux cas d'une même énumération autant qu'entre deux énumérations |
-| Toute porte d'entrée appelle un verbe métier | une surface qui agit sans traverser aucun contrôle de droit — c'est par là qu'un inconnu sans compte peut faire ce qu'il veut |
+| Toute porte d'entrée reçoit un verbe métier | la porte totalement non gardée — celle qu'on ajoute en oubliant le dispositif, et par où un inconnu sans compte peut agir |
 
 **Les trois premières ne jugent que ce qui implémente `UseCase`.** Une classe qui oublie
 l'interface leur échappe entièrement, tout en pouvant réclamer des droits. Le langage ne sait
 pas l'empêcher ; `PermissionUsage` le rattrape en test, et c'est écrit ici plutôt que passé sous silence, parce
 que c'est la seule brèche du dispositif.
+
+**La quatrième juge ce qu'une porte reçoit, pas ce qu'elle en fait.** Sa granularité est la
+classe : un contrôleur qui reçoit un verbe et écrit à côté, ou dont une seule route délègue,
+passe. C'est un garde-fou contre l'oubli du dispositif, pas une preuve que chaque route le
+traverse — [ce qui casse](docs/risques.md) le détaille (§ 10 bis et 10 ter), avec ce que le
+projet doit tenir de son côté.
 
 Deux contrôles ne peuvent pas arrêter la compilation et se jouent donc ailleurs :
 
@@ -69,7 +75,8 @@ n'en sait rien et n'a pas à en savoir.
 composer require arnaudmoncondhuy/authorization
 ```
 
-Aucune recette Flex : le bundle s'enregistre à la main dans `config/bundles.php`.
+Pas de recette Flex, mais le type `symfony-bundle` suffit : Flex enregistre seul le bundle
+dans `config/bundles.php`. Sans Flex, la ligne s'écrit à la main :
 
 ```php
 return [
@@ -85,7 +92,7 @@ return [
 | [Monter le paquet](docs/montage.md) | les six gestes, dans l'ordre, et ce qui vérifie chacun |
 | [Recettes](docs/recettes.md) | une console sans utilisateur, la mise en page d'un refus, les libellés, deux modèles de droits, l'objet interdit… |
 | [Ce qui reste au projet](docs/ce-qui-reste-au-projet.md) | les treize règles que le paquet ne tiendra pas pour vous — **à lire avant d'adopter** |
-| [Ce qui casse](docs/risques.md) | quinze façons de se tromper, et pour chacune si le docteur pourrait la voir |
+| [Ce qui casse](docs/risques.md) | dix-sept façons de se tromper, et pour chacune si le docteur pourrait la voir |
 
 Ces quatre documents ne se recouvrent pas : une question, un domicile. Ce qui se répète finit
 par diverger.
@@ -95,14 +102,16 @@ par diverger.
 **Symfony `^7.3 || ^8.1`**, et donc la **7.4 LTS**, où tourne la majeure partie du parc en
 production. Les deux branches sont jouées par la pipeline : la routine complète sur la plus
 haute, la suite de tests sur la 7.4. Une compatibilité qu'on annonce sans la jouer n'est pas
-une compatibilité.
+une compatibilité — et c'est pour cela que la **8.0** reste dehors : version intermédiaire
+dont la maintenance s'achève avant celle de la 8.1, elle n'est jouée par aucune des deux
+branches.
 
 | Composant | Pourquoi |
 |---|---|
-| `symfony/dependency-injection` | les quatre passes |
+| `symfony/dependency-injection` | les cinq passes |
 | `symfony/config` | le chargement de la configuration du bundle |
 | `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
-| `symfony/event-dispatcher` | l'écouteur qui traduit un refus |
+| `symfony/event-dispatcher` | seul lecteur du tag `kernel.event_listener` que pose le paquet |
 | `symfony/http-kernel` | la classe de bundle, et l'écouteur qui traduit un refus en 403 |
 | `symfony/console` | *suggéré* — sans lui, les deux commandes n'existent pas |
 

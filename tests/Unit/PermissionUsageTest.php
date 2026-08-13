@@ -158,7 +158,7 @@ final class PermissionUsageTest extends TestCase
     }
 
     /**
-     * La faiblesse que ce contrôle répare : les trois refus de compilation ne jugent que ce
+     * La faiblesse que ce contrôle répare : les trois premiers refus de compilation ne jugent que ce
      * qui implémente le marqueur. Une classe qui l'oublie tout en réclamant des droits leur
      * échappe entièrement — son geste n'entre dans aucun inventaire et n'est gouverné par
      * rien.

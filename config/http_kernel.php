@@ -6,7 +6,9 @@ use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 /*
- * Importé seulement là où symfony/http-kernel est installé — le paquet ne l'exige pas.
+ * L'écouteur n'a d'objet que si des requêtes HTTP passent ; le manifeste exige de toute façon
+ * symfony/http-kernel — la classe de bundle en vient — et symfony/event-dispatcher, seul
+ * lecteur du tag posé ici.
  *
  * Le tag est posé en toutes lettres plutôt que par #[AsEventListener] : l'attribut n'est lu
  * que sur les services qu'une application autoconfigure, et celui-ci est déclaré ici.
