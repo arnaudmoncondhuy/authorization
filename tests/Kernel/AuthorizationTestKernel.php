@@ -28,20 +28,24 @@ final class AuthorizationTestKernel extends Kernel
 {
     /**
      * @param list<class-string>   $services
-     * @param array<string, mixed> $providers les fournisseurs de comptes de l'application. Un seul
-     *                                        par défaut, mais le nombre compte : SecurityExtension
-     *                                        ne pose l'alias `UserProviderInterface` que s'il y en a
-     *                                        exactement un, et ne pose rien du tout s'il n'y en a
-     *                                        aucun
-     * @param bool                 $security  faux pour l'application « sans pare-feu » que le paquet
-     *                                        dit servir : SecurityBundle n'est alors pas enregistré
-     *                                        du tout, ce qui n'est pas la même chose qu'un pare-feu
-     *                                        ouvert
+     * @param array<string, mixed> $providers    les fournisseurs de comptes de l'application. Un seul
+     *                                           par défaut, mais le nombre compte : SecurityExtension
+     *                                           ne pose l'alias `UserProviderInterface` que s'il y en a
+     *                                           exactement un, et ne pose rien du tout s'il n'y en a
+     *                                           aucun
+     * @param bool                 $security     faux pour l'application « sans pare-feu » que le paquet
+     *                                           dit servir : SecurityBundle n'est alors pas enregistré
+     *                                           du tout, ce qui n'est pas la même chose qu'un pare-feu
+     *                                           ouvert
+     * @param ?string              $userProvider le fournisseur de comptes que l'application nomme
+     *                                           sous `authorization.user_provider`. Nul pour ne rien
+     *                                           configurer du tout, ce qui est le cas courant
      */
     public function __construct(
         private readonly array $services = [],
         private readonly array $providers = ['in_memory' => ['memory' => null]],
         private readonly bool $security = true,
+        private readonly ?string $userProvider = null,
     ) {
         // Hors debug : ce mode installe des gestionnaires d'erreurs globaux qu'un processus de
         // test ne doit pas hériter d'un cas au suivant. La compilation du conteneur, seule
@@ -108,6 +112,13 @@ final class AuthorizationTestKernel extends Kernel
                 $container->loadFromExtension('security', $security);
             }
 
+            // Rien n'est posé quand l'application ne nomme pas son annuaire : la clé absente
+            // et la clé nulle ne sont pas la même configuration à écrire dans un projet, et
+            // c'est la première qui est le cas courant.
+            if (null !== $this->userProvider) {
+                $container->loadFromExtension('authorization', ['user_provider' => $this->userProvider]);
+            }
+
             foreach ($this->services as $class) {
                 $container->register($class, $class)
                     ->setAutoconfigured(true)
@@ -137,7 +148,13 @@ final class AuthorizationTestKernel extends Kernel
         // successivement sur deux branches relit le conteneur compilé pour l'autre, et la suite
         // tombe sur une classe qui n'existe pas dans celle qui tourne — un échec qui accuse le
         // paquet d'une faute qui appartient au cache.
-        $key = md5(implode('|', [Kernel::VERSION, json_encode($this->providers), $this->security ? 'security' : 'bare', ...$this->services]));
+        $key = md5(implode('|', [
+            Kernel::VERSION,
+            json_encode($this->providers),
+            $this->security ? 'security' : 'bare',
+            $this->userProvider ?? 'toute la chaîne',
+            ...$this->services,
+        ]));
 
         return sys_get_temp_dir().'/authorization-bundle/'.substr($key, 0, 12);
     }

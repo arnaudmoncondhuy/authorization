@@ -25,10 +25,15 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
  */
 return static function (ContainerConfigurator $container): void {
     // Ce que `authorization:doctor` lit pour dire si le contrat « répondre sur un tiers » est
-    // branché. Vrai par défaut puisqu'on vient de le déclarer ; remis à nul par la passe quand
-    // l'application n'a aucun fournisseur de comptes.
+    // branché, et où il cherche les comptes. Vrais par défaut puisqu'on vient de le déclarer ;
+    // remis à nul par la passe quand l'application n'a aucun fournisseur de comptes, et le
+    // second remplacé par la classe de bundle quand l'application nomme son annuaire.
     $container->parameters()
         ->set(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PARAMETER, SecurityUserAuthorizer::class)
+        ->set(
+            RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PROVIDER_PARAMETER,
+            RefuseUserAuthorizerWithoutProviderPass::USER_PROVIDERS_SERVICE,
+        )
     ;
 
     $container->services()
@@ -51,6 +56,9 @@ return static function (ContainerConfigurator $container): void {
         //
         // Il reste un cas que ce nom ne couvre pas : à zéro fournisseur, il n'existe pas
         // davantage. C'est RefuseUserAuthorizerWithoutProviderPass qui le tient.
+        //
+        // La clé `authorization.user_provider` remplace cet argument par le fournisseur qu'elle
+        // nomme, et la classe de bundle est le seul endroit d'où la configuration se lit.
         ->set(SecurityUserAuthorizer::class)
             ->args([
                 service(UserAuthorizationCheckerInterface::class),

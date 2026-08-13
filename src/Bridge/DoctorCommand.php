@@ -50,18 +50,22 @@ final class DoctorCommand extends Command
 {
     /**
      * @param iterable<VoterInterface> $voters
-     * @param ?class-string            $onBehalf l'adaptateur qui répond sur un tiers, ou nul quand
-     *                                           la configuration de sécurité ne déclare aucun
-     *                                           fournisseur de comptes. Le nom et non le service :
-     *                                           l'injecter le compterait utilisé, et
-     *                                           {@see \ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass}
-     *                                           ferait échouer la compilation ici même
+     * @param ?class-string            $onBehalf  l'adaptateur qui répond sur un tiers, ou nul quand
+     *                                            la configuration de sécurité ne déclare aucun
+     *                                            fournisseur de comptes. Le nom et non le service :
+     *                                            l'injecter le compterait utilisé, et
+     *                                            {@see \ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass}
+     *                                            ferait échouer la compilation ici même
+     * @param ?string                  $directory le service de fournisseur de comptes où cet
+     *                                            adaptateur cherche : la chaîne de tous ceux que
+     *                                            l'application déclare, ou le seul qu'elle a nommé
      */
     public function __construct(
         private readonly PermissionCatalog $catalog,
         private readonly Authorizer $access,
         private readonly iterable $voters,
         private readonly ?string $onBehalf = null,
+        private readonly ?string $directory = null,
     ) {
         parent::__construct();
     }
@@ -83,6 +87,13 @@ final class DoctorCommand extends Command
         $console->writeln(\sprintf('Contrat  : %s', $this->access::class));
         $console->writeln(\sprintf('Tiers    : %s', $this->onBehalf
             ?? 'non branché — la configuration de sécurité ne déclare aucun fournisseur de comptes'));
+
+        // Sans contrat branché, il n'y a pas d'annuaire à nommer : la ligne dirait un service
+        // que personne n'interroge.
+        if (null !== $this->onBehalf && null !== $this->directory) {
+            $console->writeln(\sprintf('Annuaire : %s', $this->directory));
+        }
+
         $console->writeln(\sprintf('Voters   : %d enregistré(s)', \count($this->registeredVoters())));
 
         $permissions = $this->catalog->all();

@@ -54,6 +54,9 @@ l'injecte, et ne dit rien si elle ne l'injecte pas. Répondre `false` faute de f
 aurait fermé aussi — donc sans faille — mais aurait fait passer une absence de réponse pour un
 refus de droit, et c'est la seule chose que ce contrat sache dire.
 
+Leur **nombre**, lui, est indifférent : la recherche parcourt la chaîne de tous ceux que vous
+déclarez, et `authorization.user_provider` la restreint à celui que vous nommez (§ 16).
+
 **11. `PermissionUsage` ne lit que ce que les chemins nomment.** Il déduit un type de
 l'emplacement de chaque fichier, selon PSR-4. Un fichier qui ne déclare pas ce que sa place
 annonce est **rapporté comme faute**, jamais sauté : une classe renommée sans que son fichier
@@ -540,6 +543,45 @@ cela lui pose la moindre question.
 
 ---
 
+### 16. Un contrat qui ne casse que le jour où l'on s'en sert
+
+**Ce qui casse.** L'adaptateur qui répond sur un tiers reçoit le fournisseur de comptes de
+l'application, et le nom qu'il cite décide de qui peut compiler. `SecurityExtension` ne pose
+l'alias `UserProviderInterface` que s'il existe **exactement un** fournisseur — pas de branche
+pour zéro, pas de branche pour deux. `security.user_providers`, lui, existe dès qu'il y en a un,
+et rend la chaîne au-delà. Un paquet qui cite le premier s'installe chez qui n'a qu'un annuaire,
+et casse chez qui en ajoute un second — un annuaire pour les personnes, un autre pour les
+comptes de machine :
+
+```
+The service "…\Bridge\SecurityUserAuthorizer" has a dependency on a non-existent
+service "Symfony\Component\Security\Core\User\UserProviderInterface".
+```
+
+**Comment ça se manifeste. Pas tout de suite, et c'est tout le risque.** Tant qu'aucun service
+conservé par le conteneur n'injecte `UserAuthorizer`, la définition est retirée comme inutilisée
+— `RemoveUnusedDefinitionsPass` passe avant `CheckExceptionOnInvalidReferenceBehaviorPass` — et
+l'application compile sans un mot. La panne dort donc entre le jour où le second annuaire est
+déclaré et le jour où quelqu'un se sert du contrat, et c'est le second qui reçoit l'erreur, sur
+un code qu'il n'a pas touché. Vérifié dans les deux sens : un noyau à deux fournisseurs qui
+injecte le contrat s'arrête, le même noyau sans consommateur démarre au vert.
+
+**Comment l'éviter.** Viser la chaîne plutôt que le fournisseur unique, ce que fait ce paquet.
+Et éprouver ce qui dépend d'un fournisseur de comptes sur une application qui en déclare
+**deux** : un seul est le cas particulier, celui qui cache la faute au lieu de la montrer. C'est
+ce que tient `UserProviderWiringTest` — son noyau à deux fournisseurs rougit sur tout câblage
+qui cite le fournisseur unique.
+
+**Le docteur ? Il ne peut pas.** Il tourne dans le conteneur compilé, et la faute est
+précisément ce qui empêche de le compiler : le jour où elle se manifeste, la commande ne démarre
+pas davantage que l'application. Ce qui tient sa place est un témoin d'intégration — le noyau de
+test à deux fournisseurs — et une ligne `Annuaire` dans l'en-tête de son rapport, qui dit où les
+comptes sont cherchés. Cette ligne-là ne montre pas une compilation qui n'a pas eu lieu ; elle
+montre la restriction que `authorization.user_provider` pose, et qui ne casse rien : elle rend
+seulement introuvables des comptes que la chaîne aurait trouvés.
+
+---
+
 ## Les contrôles qui restent à apprendre au docteur
 
 **Le premier de la liste**, et il vient du risque 10 bis : une route qui poste un message ou
@@ -552,6 +594,7 @@ Résumé de la section C, dans l'ordre du rapport bénéfice / coût.
 |---|---|---|
 | C.3 | compter les voters qui jugent chaque droit, avertir au-delà de un | **le fait déjà** — signalé par défaut, échec sous `--strict` |
 | C.14 | afficher la stratégie de décision en tête du rapport | pourrait — une ligne |
+| C.16 | dire dans quel annuaire les comptes d'un tiers sont cherchés | **l'affiche déjà** — mais la faute qui s'y rattache empêche la compilation, donc la commande aussi |
 | C.11 | attraper l'exception d'un voter et la rapporter au lieu de la laisser fuir | **le fait déjà** |
 | C.6 | signaler une classe qui implémente `UseCase` sans porter le tag | pourrait — mieux encore dans la passe de compilation |
 | C.1 | confronter les identités stockées au catalogue | pourrait, si l'application lui fournit ses identités stockées |

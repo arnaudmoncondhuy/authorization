@@ -28,6 +28,8 @@ return static function (ContainerConfigurator $container): void {
                 // compilation de toute application sans fournisseur de comptes — la commande
                 // chargée de rapporter l'absence en deviendrait la cause.
                 param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PARAMETER),
+                // Et le nom de l'annuaire où il cherche, pour la même raison.
+                param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PROVIDER_PARAMETER),
             ])
             ->tag('console.command')
     ;

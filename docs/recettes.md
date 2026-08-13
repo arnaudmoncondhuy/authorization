@@ -193,7 +193,8 @@ les deux transformerait une lecture en usurpation. Un identifiant qu'aucun compt
 est tenue par le conteneur : injecter `UserAuthorizer` dans une application qui ne déclare aucun
 fournisseur de comptes arrête la compilation sur un message qui le dit. Le nombre, lui, est
 indifférent — un fournisseur, ou une table plus un annuaire LDAP, le contrat interroge la chaîne
-entière.
+entière. Si cette chaîne est de trop, `authorization.user_provider` nomme le seul annuaire où
+chercher : voir [monter le paquet](montage.md).
 
 Le refus est ciblé : une application sans fournisseur qui n'injecte pas ce contrat compile sans
 un mot. Ne pas s'en servir n'a pas à coûter un avertissement, et `authorization:doctor` donne de

@@ -58,6 +58,13 @@ final readonly class RefuseUserAuthorizerWithoutProviderPass implements Compiler
      */
     public const string ON_BEHALF_PARAMETER = 'authorization.on_behalf';
 
+    /**
+     * L'annuaire où ce contrat cherche les comptes : la chaîne entière, ou le fournisseur que
+     * l'application a nommé. Le lire est la seule façon de voir cette restriction sans ouvrir le
+     * conteneur compilé, et elle décide de qui trouve un compte.
+     */
+    public const string ON_BEHALF_PROVIDER_PARAMETER = 'authorization.on_behalf_provider';
+
     public function process(ContainerBuilder $container): void
     {
         // Absent quand l'application n'a pas de pare-feu : `config/security.php` n'est alors
@@ -77,6 +84,7 @@ final readonly class RefuseUserAuthorizerWithoutProviderPass implements Compiler
         }
 
         $container->setParameter(self::ON_BEHALF_PARAMETER, null);
+        $container->setParameter(self::ON_BEHALF_PROVIDER_PARAMETER, null);
 
         $definition = $container->getDefinition($adapter);
 

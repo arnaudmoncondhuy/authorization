@@ -220,4 +220,45 @@ Ce qu'il ne voit pas non plus : un droit jugé par le mauvais modèle. Si l'écr
 cocher sur un rôle quand seul un groupe l'accorde, le droit a bien un juge — il est seulement
 accordé au mauvais endroit.
 
+## La seule clé de configuration
+
+Les six gestes tiennent sans écrire une ligne de configuration : le paquet se câble sur ce que
+l'application déclare déjà. Une clé existe pourtant, et elle ne sert qu'à **restreindre**.
+
+`UserAuthorizer` — ce qu'un autre que l'appelant a le droit de faire — désigne un compte par son
+identifiant, et le charge par le fournisseur de comptes de l'application. Il interroge
+`security.user_providers`, le service que Symfony pose **dès qu'il existe un fournisseur** :
+un alias vers l'unique, un `ChainUserProvider` au-delà. Un compte est donc trouvé quel que soit
+l'annuaire où il vit — une table, un annuaire LDAP, les deux.
+
+Quand la chaîne entière est de trop — des comptes de service qu'aucune notification ne doit
+atteindre, deux annuaires qui peuvent porter le même identifiant, un annuaire distant qu'on ne
+veut pas interroger pour rien — nommez celui où chercher :
+
+```yaml
+# config/packages/authorization.yaml
+authorization:
+    user_provider: security.user.provider.concrete.app_users
+```
+
+C'est le nom du **service**, et non celui de l'entrée : Symfony le fabrique en préfixant
+`security.user.provider.concrete.` au nom écrit sous `security.providers`, en minuscules. Un nom
+qui ne désigne aucun service arrête la compilation sur le message de Symfony, qui le cite tel
+qu'il a été écrit — mais le jour seulement où un service de l'application injecte le contrat,
+comme toute référence que le conteneur retire tant que personne ne s'en sert
+([ce qui casse](risques.md), § 16).
+
+Ce que le geste change ne se voit qu'à un endroit — `authorization:doctor`, sur la ligne qui
+suit le contrat :
+
+```
+Contrat  : ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer
+Tiers    : ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer
+Annuaire : security.user.provider.concrete.app_users
+```
+
+Sans la clé, cette ligne affiche `security.user_providers` : la chaîne entière. La restriction ne
+change rien à la compilation, et tout aux comptes qui seront trouvés — un identifiant que
+l'annuaire nommé ne porte pas rend `false`, comme un identifiant qui n'existe nulle part.
+
 ---

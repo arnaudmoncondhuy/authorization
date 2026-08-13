@@ -89,10 +89,10 @@ return [
 
 | Document | Ce qu'il répond |
 |---|---|
-| [Monter le paquet](docs/montage.md) | les six gestes, dans l'ordre, et ce qui vérifie chacun |
+| [Monter le paquet](docs/montage.md) | les six gestes, dans l'ordre, ce qui vérifie chacun, et la seule clé de configuration |
 | [Recettes](docs/recettes.md) | une console sans utilisateur, la mise en page d'un refus, les libellés, deux modèles de droits, l'objet interdit… |
 | [Ce qui reste au projet](docs/ce-qui-reste-au-projet.md) | les treize règles que le paquet ne tiendra pas pour vous — **à lire avant d'adopter** |
-| [Ce qui casse](docs/risques.md) | dix-sept façons de se tromper, et pour chacune si le docteur pourrait la voir |
+| [Ce qui casse](docs/risques.md) | dix-huit façons de se tromper, et pour chacune si le docteur pourrait la voir |
 
 Ces quatre documents ne se recouvrent pas : une question, un domicile. Ce qui se répète finit
 par diverger.

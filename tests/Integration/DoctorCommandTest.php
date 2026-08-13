@@ -144,6 +144,39 @@ final class DoctorCommandTest extends TestCase
     }
 
     /**
+     * Et où il cherchera les comptes de ces tiers. Par défaut, la chaîne de tous les
+     * fournisseurs que l'application déclare : c'est le service que SecurityExtension pose dès
+     * qu'il en existe un, et le seul qui vaille aussi bien pour un annuaire que pour dix.
+     */
+    public function testItNamesTheDirectoryWhereAccountsAreSearched(): void
+    {
+        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
+
+        self::assertStringContainsString('Annuaire : security.user_providers', $tester->getDisplay());
+    }
+
+    /**
+     * Une application qui restreint la recherche à un annuaire le lit ici, et c'est le seul
+     * endroit où cette restriction se voit : elle ne change rien à la compilation, et tout aux
+     * comptes qui seront trouvés.
+     */
+    public function testItNamesTheProviderTheApplicationChose(): void
+    {
+        $container = $this->start(new AuthorizationTestKernel(
+            [ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class],
+            userProvider: 'security.user.provider.concrete.in_memory',
+        ));
+
+        $command = $container->get(DoctorCommand::class);
+        self::assertInstanceOf(DoctorCommand::class, $command);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        self::assertStringContainsString('Annuaire : security.user.provider.concrete.in_memory', $tester->getDisplay());
+    }
+
+    /**
      * Sur une application sans droit déclaré, il n'y a rien à examiner. Le dire plutôt que de
      * rendre un vert franc, qui laisserait croire qu'une installation a été vérifiée.
      */
@@ -198,10 +231,15 @@ final class DoctorCommandTest extends TestCase
     /** @param class-string ...$services */
     private function boot(string ...$services): ContainerInterface
     {
-        $this->kernel = new AuthorizationTestKernel(array_values($services));
-        $this->kernel->boot();
+        return $this->start(new AuthorizationTestKernel(array_values($services)));
+    }
 
-        $container = $this->kernel->getContainer()->get('test.service_container');
+    private function start(AuthorizationTestKernel $kernel): ContainerInterface
+    {
+        $this->kernel = $kernel;
+        $kernel->boot();
+
+        $container = $kernel->getContainer()->get('test.service_container');
         self::assertInstanceOf(ContainerInterface::class, $container);
 
         return $container;

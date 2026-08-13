@@ -10,9 +10,11 @@ use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckUseCasesDeclarePermi
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RegisterPermissionCatalogPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\Tag;
+use Symfony\Component\Config\Definition\Configurator\DefinitionConfigurator;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\Bundle\AbstractBundle;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 
@@ -57,11 +59,32 @@ final class AuthorizationBundle extends AbstractBundle
     }
 
     /**
+     * La seule clé que le paquet expose, et elle ne sert qu'à restreindre : rien n'est à écrire
+     * pour monter le dispositif.
+     */
+    public function configure(DefinitionConfigurator $definition): void
+    {
+        $definition->rootNode()
+            ->children()
+                ->scalarNode('user_provider')
+                    ->defaultNull()
+                    ->cannotBeEmpty()
+                    ->info(
+                        'Le fournisseur de comptes où chercher le tiers que `UserAuthorizer` désigne par son '
+                        .'identifiant. Absente, la recherche parcourt tous ceux que `security.providers` déclare.'
+                    )
+                ->end()
+            ->end()
+        ;
+    }
+
+    /**
      * Les deux adaptateurs sont facultatifs, et chacun est conditionné à ce dont il dépend :
      * le paquet doit s'installer dans une application sans pare-feu comme dans une application
      * sans HTTP.
      *
-     * @param array<array-key, mixed> $config le paquet n'expose aucune configuration
+     * @param array<array-key, mixed> $config la configuration du bundle, telle que
+     *                                        {@see self::configure()} la décrit
      */
     public function loadExtension(array $config, ContainerConfigurator $configurator, ContainerBuilder $container): void
     {
@@ -77,6 +100,14 @@ final class AuthorizationBundle extends AbstractBundle
         if (isset($bundles['SecurityBundle'])) {
             $configurator->import('../config/security.php');
 
+            // La clé absente laisse l'adaptateur sur la chaîne de tous les fournisseurs, qui est
+            // ce que `config/security.php` lui donne.
+            $provider = $config['user_provider'] ?? null;
+
+            if (\is_string($provider)) {
+                $this->searchAccountsIn($container, $provider);
+            }
+
             // Le docteur, lui, interroge le contrôle d'accès : sans pare-feu, il n'aurait
             // rien à examiner.
             if (class_exists(Command::class)) {
@@ -87,5 +118,26 @@ final class AuthorizationBundle extends AbstractBundle
         if (class_exists(ExceptionEvent::class)) {
             $configurator->import('../config/http_kernel.php');
         }
+    }
+
+    /**
+     * Restreint la recherche d'un compte au seul fournisseur que l'application nomme.
+     *
+     * La définition est jointe par l'alias du contrat et non par le nom d'un adaptateur, et
+     * l'argument est reconnu à ce qu'il désigne et non à son rang : une application qui aurait
+     * substitué le sien reçoit le même traitement.
+     */
+    private function searchAccountsIn(ContainerBuilder $container, string $provider): void
+    {
+        $definition = $container->findDefinition(UserAuthorizer::class);
+
+        foreach ($definition->getArguments() as $index => $argument) {
+            if ($argument instanceof Reference
+                && RefuseUserAuthorizerWithoutProviderPass::USER_PROVIDERS_SERVICE === (string) $argument) {
+                $definition->replaceArgument($index, new Reference($provider));
+            }
+        }
+
+        $container->setParameter(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PROVIDER_PARAMETER, $provider);
     }
 }
