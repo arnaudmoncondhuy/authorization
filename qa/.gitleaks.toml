@@ -7,18 +7,101 @@
 # ⚠️ Un secret détecté ne se règle PAS en l'ajoutant ci-dessous. L'ordre est : (1) faire tourner
 #    le secret chez son émetteur, (2) réécrire l'historique s'il y est, (3) et seulement alors,
 #    si la valeur reste dans l'historique et qu'elle est morte, l'inscrire ici.
+#
+# ── Pourquoi les règles ci-dessous existent ────────────────────────────────────────────────
+#
+# Le jeu par défaut cherche des secrets qui se reconnaissent à leur préfixe d'émetteur —
+# `ghp_`, `sk-`, `AKIA`. Il est excellent pour ceux-là et aveugle à tout le reste. Ce dépôt a
+# porté pendant un temps un APP_SECRET Symfony et un mot de passe PostgreSQL en clair, dans
+# une sortie de phpinfo() commitée par mégarde : 22 commits scannés, « no leaks found », et
+# l'étape 6 de check.sh au vert. Le contrôle certifiait sans avoir regardé.
+#
+# Deux formes manquaient, et elles n'ont pas la même nature.
+#
+# La première est un secret nu : un APP_SECRET est 64 caractères hexadécimaux, une chaîne qui
+# ne dit rien d'elle-même. Seul le mot qui la précède la trahit — d'où des règles ancrées sur
+# le nom, pas sur la valeur.
+#
+# La seconde n'est pas un secret mais un ARTEFACT : une sortie de phpinfo(), un pot à cookies
+# libcurl. Ce qu'ils portent varie, mais leur présence dans un dépôt est toujours une faute,
+# et toujours la même — un fichier de mise au point emporté par un `git add .`. Les chercher
+# à la forme du contenant plutôt qu'à celle du contenu attrape aussi ce qu'on n'a pas prévu.
 
 title = "arnaudmoncondhuy/authorization"
 
 [extend]
 useDefault = true
 
+# ── Secrets nus, reconnus par le nom qui les précède ───────────────────────────────────────
+
+[[rules]]
+id = "symfony-app-secret"
+description = "APP_SECRET Symfony — il signe les cookies de session et les jetons CSRF"
+# La valeur est cherchée dans les 60 caractères qui suivent le nom : assez pour franchir un
+# `=`, un `: `, ou le `</td><td class=\"v\">` d'un tableau phpinfo, trop peu pour ramasser une
+# empreinte sans rapport plus bas dans le fichier.
+regex = '''(?i)app[_-]?secret.{0,60}?\b([a-f0-9]{32,128})\b'''
+secretGroup = 1
+# Écarte les valeurs de remplissage (`0000…`, `abababab…`) sans écarter un vrai tirage.
+entropy = 3.0
+keywords = ["app_secret", "app-secret", "appsecret"]
+tags = ["symfony", "secret"]
+
+[[rules]]
+id = "database-url-credentials"
+description = "Mot de passe dans une URI de connexion (DATABASE_URL, MESSENGER_TRANSPORT_DSN…)"
+# L'hôte importe peu : `database:5432` est interne à un réseau Docker, mais le mot de passe
+# qu'il porte est souvent le même qu'ailleurs, et c'est lui qu'on lit.
+regex = '''(?i)\b(?:postgres(?:ql)?|mysqli?|mariadb|mongodb(?:\+srv)?|rediss?|amqps?|mssql|sqlsrv|ftp)://[^\s:@/'"<>]{1,64}:([^\s:@/'"<>]{4,128})@'''
+secretGroup = 1
+keywords = ["postgres", "mysql", "mariadb", "mongodb", "redis", "amqp", "mssql", "sqlsrv", "ftp://"]
+tags = ["database", "credentials"]
+
+[[rules]]
+id = "session-cookie-value"
+description = "Identifiant de session applicatif — rejouable tant qu'il n'a pas expiré"
+regex = '''(?i)\b(?:PHPSESSID|JSESSIONID|ASP\.NET_SessionId|connect\.sid|laravel_session|remember(?:me)?_?token)\b["'\s\t:=]{1,10}([A-Za-z0-9%._+-]{16,256})'''
+secretGroup = 1
+keywords = ["phpsessid", "jsessionid", "asp.net_sessionid", "connect.sid", "laravel_session", "rememberme", "remember_token"]
+tags = ["session"]
+
+# ── Artefacts de mise au point, reconnus à la forme du fichier ─────────────────────────────
+#
+# Ces deux règles ne cherchent aucun secret : elles refusent le contenant. Ce qu'il porte
+# aujourd'hui n'est pas ce qu'il portera la prochaine fois, et c'est précisément pourquoi il
+# ne faut pas attendre d'en reconnaître le contenu.
+
+[[rules]]
+id = "phpinfo-output"
+description = "Sortie de phpinfo() commitée — elle expose l'environnement entier du conteneur"
+regex = '''<title>[^<]{0,64}phpinfo\(\)</title>'''
+keywords = ["phpinfo"]
+tags = ["artefact-de-mise-au-point"]
+
+[[rules]]
+id = "netscape-cookie-jar"
+description = "Pot à cookies libcurl commité — il porte des sessions ouvertes"
+regex = '''#\s?Netscape HTTP Cookie File'''
+keywords = ["netscape http cookie file"]
+tags = ["artefact-de-mise-au-point", "session"]
+
 [allowlist]
-description = "Chemins sans secret par construction"
+description = "Chemins sans secret par construction, et valeurs de remplissage"
 
 paths = [
     # Dépendances et fichiers générés : ce qui s'y trouve ne vient pas de nous.
     '''vendor/''',
     '''var/''',
     '''qa/bin/''',
+    # Ce fichier cite les motifs qu'il cherche : sans cela, il se signale lui-même.
+    '''qa/\.gitleaks\.toml''',
+]
+
+# Confrontées à la valeur trouvée, pas à la ligne. Le `!ChangeMe!` du .env de Symfony est le
+# cas qui compte : sans cela, la règle ci-dessus crierait sur toute application neuve.
+regexes = [
+    '''(?i)^!?change[_-]?me!?$''',
+    '''(?i)^(password|passwd|secret|token|user|username|app|root|test|example|placeholder|redacted|xxx+|\.{3,}|\*{3,})$''',
+    '''(?i)^\$\{[^}]+\}$''',
+    '''(?i)^%[a-z0-9_.]+%$''',
 ]
