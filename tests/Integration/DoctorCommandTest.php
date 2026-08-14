@@ -9,9 +9,12 @@ use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\OverlappingPermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\PartialPermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\UnguardedPermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Stock\AdjustStockUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -129,6 +132,70 @@ final class DoctorCommandTest extends TestCase
 
         self::assertStringContainsString('fixture.invoice.view', $tester->getDisplay());
         self::assertStringContainsString('n\'a pas pu être examiné', $tester->getDisplay());
+    }
+
+    /**
+     * Ce qu'un droit sans juge coûte à réparer : le voter qui manque est écrit, il ne reste
+     * qu'à décider. La garde en fait partie — c'est elle qu'on oublie, et son oubli rend une
+     * erreur serveur là où on attendait un refus.
+     */
+    public function testItSketchesTheVoterThatIsMissing(): void
+    {
+        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class);
+        $display = $tester->getDisplay();
+
+        self::assertStringContainsString('final class InvoiceVoter extends Voter', $display);
+        self::assertStringContainsString("'fixture.invoice.view',", $display);
+        self::assertStringContainsString('!$token->getUser() instanceof UserInterface', $display);
+    }
+
+    /**
+     * Et il ne porte que les identités sans juge. Reprendre l'énumération entière donnerait un
+     * second juge à celles qui en ont un — soit exactement le recouvrement que la commande
+     * signale par ailleurs, et qui élargit les droits au lieu de les fermer.
+     */
+    public function testTheSketchLeavesOutTheIdentitiesThatAlreadyHaveAJudge(): void
+    {
+        $tester = $this->diagnose(
+            ViewInvoiceUseCase::class,
+            FinalizeInvoiceUseCase::class,
+            InvoiceBook::class,
+            PartialPermissionVoter::class,
+        );
+        $display = $tester->getDisplay();
+
+        self::assertStringContainsString("'fixture.invoice.finalize',", $display);
+        self::assertStringContainsString("'fixture.invoice.backdate',", $display);
+        self::assertStringNotContainsString("'fixture.invoice.view',", $display);
+    }
+
+    /**
+     * Un squelette par contexte métier, et non un voter unique pour tout ce qui manque : c'est
+     * le découpage que le paquet demande aux énumérations, et deux contextes réunis dans un
+     * même `supports()` feraient d'un droit de facturation l'affaire du voter des stocks.
+     */
+    public function testItSketchesOneVoterPerContext(): void
+    {
+        $tester = $this->diagnose(
+            ViewInvoiceUseCase::class,
+            InvoiceBook::class,
+            AdjustStockUseCase::class,
+        );
+        $display = $tester->getDisplay();
+
+        self::assertStringContainsString('final class InvoiceVoter extends Voter', $display);
+        self::assertStringContainsString('final class StockVoter extends Voter', $display);
+    }
+
+    /**
+     * Une installation qui se tient n'a rien à proposer. Le squelette est le remède d'une
+     * faute, pas un ornement du rapport.
+     */
+    public function testItSketchesNothingWhenEveryPermissionHasAJudge(): void
+    {
+        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
+
+        self::assertStringNotContainsString('extends Voter', $tester->getDisplay());
     }
 
     /**

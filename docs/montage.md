@@ -74,6 +74,10 @@ déclaré que le corps se contente de tester est d'ailleurs signalé comme jamai
 Le paquet transforme chaque droit en attribut soumis au contrôle d'accès de Symfony. À vous de
 dire qui l'obtient.
 
+Vous n'êtes pas tenu de partir de la page blanche : `authorization:doctor` écrit le squelette
+du voter qui manque, avec les identités dedans et la garde en place — voir l'étape 6. Ce qu'il
+laisse à écrire est la seule chose qu'il ne peut pas savoir : qui détient le droit.
+
 ```php
 namespace App\Security;
 
@@ -191,6 +195,17 @@ php bin/console authorization:doctor        # ce qui manque pour que ça marche
 Le docteur cherche ce qu'aucun autre contrôle ne voit : **un droit qu'aucun voter ne prend en
 charge**. Le code l'exige, l'inventaire le propose, l'écran d'attribution permet de le cocher —
 et il est refusé à tout le monde, administrateur compris, sans qu'aucune erreur ne soit levée.
+
+**Il écrit le voter qui manque**, un par contexte, et rien qu'il ne sache : les identités sans
+juge et elles seules — reprendre l'énumération entière donnerait un second juge à celles qui en
+ont déjà un —, la garde qui refuse un jeton sans utilisateur, et une règle de décision laissée
+vide, qui refuse. Le nom et l'espace de noms sont une proposition ; le paquet ne connaît ni
+votre arborescence ni vos conventions.
+
+Le squelette est **affiché, jamais écrit sur disque**, et il n'accorde rien. Qui détient un
+droit reste une décision, et une décision ne se devine pas : un correctif automatique qui se
+tromperait ouvrirait ou fermerait un accès en silence, ce que cette commande existe précisément
+pour rendre visible.
 
 Il rend un code de sortie, donc une routine qualité peut s'appuyer dessus. Sur une application
 sans droit déclaré, il dit qu'il n'y a rien à examiner plutôt que de rendre un vert franc.

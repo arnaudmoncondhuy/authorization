@@ -38,6 +38,14 @@ use Symfony\Component\Security\Core\Authorization\Voter\VoterInterface;
  * la surface rendra une erreur serveur au lieu d'un refus. Il est rapporté, l'examen continue,
  * et le bilan dit que la conclusion sur les orphelins n'est plus entière.
  *
+ * Aux droits sans juge, elle joint le squelette du voter qui les prendrait en charge. Le nom et
+ * l'espace de noms y sont une proposition ; les identités, non — elle n'y porte que celles qui
+ * manquent de juge, parce que reprendre l'énumération entière donnerait un second juge à celles
+ * qui en ont déjà un, et que sous `affirmative` un recouvrement élargit les droits.
+ *
+ * Le squelette est **affiché, jamais écrit**, et il n'accorde rien : quel voter prend en charge
+ * quel droit, et qui l'obtient, sont des décisions qui appartiennent au projet.
+ *
  * Elle échoue plutôt que d'afficher : une routine qualité ne peut s'appuyer que sur ce qui
  * rend un code de sortie.
  */
@@ -119,7 +127,10 @@ final class DoctorCommand extends Command
             $judges[$permission->id()] = $this->judgesOf($permission, $raised);
         }
 
-        $orphans = array_keys(array_filter($judges, static fn (array $j): bool => [] === $j));
+        $unjudged = array_values(array_filter(
+            $permissions,
+            static fn (Permission $permission): bool => [] === $judges[$permission->id()],
+        ));
         $shared = array_filter($judges, static fn (array $j): bool => \count($j) > 1);
 
         if ([] !== $raised) {
@@ -133,9 +144,9 @@ final class DoctorCommand extends Command
             $console->writeln('`supports()` ou en tête de `voteOnAttribute()` ferme les deux à la fois.');
         }
 
-        if ([] !== $orphans) {
+        if ([] !== $unjudged) {
             $console->error('Des droits ne sont jugés par personne, et sont donc refusés à tout le monde :');
-            $console->listing($orphans);
+            $console->listing(array_map(static fn (Permission $permission): string => $permission->id(), $unjudged));
             $console->writeln('Un voter doit reconnaître ces identités dans son `supports()`, sinon les');
             $console->writeln('verbes qui les exigent restent fermés, y compris pour un administrateur.');
 
@@ -144,6 +155,8 @@ final class DoctorCommand extends Command
                 $console->writeln('⚠ Un voter au moins n\'a pas pu être examiné : cette liste peut nommer un');
                 $console->writeln('  droit qu\'il aurait pris en charge. La lire après avoir réparé ce qui lève.');
             }
+
+            $this->sketch($console, $unjudged);
         }
 
         if ([] !== $shared) {
@@ -160,7 +173,7 @@ final class DoctorCommand extends Command
         // Un voter qui lève fait échouer au même titre qu'un droit orphelin, et pour la raison
         // qui fonde cette commande : l'examen n'a pas eu lieu. Rendre SUCCESS ici certifierait
         // une installation qu'on n'a pas su regarder.
-        if ([] !== $orphans || [] !== $raised || ([] !== $shared && $input->getOption('strict'))) {
+        if ([] !== $unjudged || [] !== $raised || ([] !== $shared && $input->getOption('strict'))) {
             return Command::FAILURE;
         }
 
@@ -169,6 +182,128 @@ final class DoctorCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Le voter qui manque, écrit, pour n'avoir plus qu'à décider.
+     *
+     * Un squelette par contexte, le contexte étant l'énumération qui déclare le droit : c'est
+     * le découpage que le paquet demande déjà, et deux contextes dans un même `supports()`
+     * feraient d'un droit de facturation l'affaire du voter des stocks.
+     *
+     * @param list<Permission> $unjudged
+     */
+    private function sketch(SymfonyStyle $console, array $unjudged): void
+    {
+        $console->newLine();
+        $console->writeln('Un voter qui les prend en charge ressemblerait à ceci. Le nom et l\'espace de noms');
+        $console->writeln('sont une proposition ; les identités ne le sont pas — ce sont celles qui manquent');
+        $console->writeln('de juge, et elles seules. Reprendre l\'énumération entière donnerait un second juge');
+        $console->writeln('aux droits qui en ont déjà un, ce qui les élargit au lieu de les fermer.');
+
+        foreach ($this->sketches($unjudged) as $path => $sketch) {
+            $console->newLine();
+            $console->writeln(\sprintf('# %s', $path));
+            $console->newLine();
+            // Sans mise en forme : c'est du code destiné à être repris tel quel, et le
+            // formateur de la console lit `<...>` comme une balise de style.
+            $console->writeln($sketch, OutputInterface::OUTPUT_RAW);
+        }
+    }
+
+    /**
+     * @param list<Permission> $unjudged
+     *
+     * @return array<string, string> le chemin proposé, et le code qui va dedans
+     */
+    private function sketches(array $unjudged): array
+    {
+        /** @var array<class-string, list<string>> $contexts */
+        $contexts = [];
+
+        foreach ($unjudged as $permission) {
+            $contexts[$permission::class][] = $permission->id();
+        }
+
+        $sketches = [];
+
+        foreach ($contexts as $context => $ids) {
+            $name = $this->voterName($context);
+            $sketches[\sprintf('src/Security/%s.php', $name)] = $this->sketchOf($name, $ids);
+        }
+
+        return $sketches;
+    }
+
+    /**
+     * Le refus explicite plutôt que l'abstention, aux deux endroits où il compte : le jeton
+     * sans utilisateur est celui d'une requête anonyme, et une abstention y fermerait aussi le
+     * verbe à toute surface sans session ; la règle laissée à écrire refuse, parce qu'un
+     * squelette qui accorderait ouvrirait le droit à la seconde où il est collé.
+     *
+     * @param list<string> $ids
+     */
+    private function sketchOf(string $name, array $ids): string
+    {
+        $listed = implode("\n", array_map(
+            static fn (string $id): string => \sprintf("            '%s',", $id),
+            $ids,
+        ));
+
+        return strtr(<<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            namespace App\Security;
+
+            use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
+            use Symfony\Component\Security\Core\Authorization\Voter\Vote;
+            use Symfony\Component\Security\Core\Authorization\Voter\Voter;
+            use Symfony\Component\Security\Core\User\UserInterface;
+
+            /** @extends Voter<string, mixed> */
+            final class {name} extends Voter
+            {
+                protected function supports(string $attribute, mixed $subject): bool
+                {
+                    return \in_array($attribute, [
+            {ids}
+                    ], true);
+                }
+
+                protected function voteOnAttribute(string $attribute, mixed $subject, TokenInterface $token, ?Vote $vote = null): bool
+                {
+                    // Le jeton d'une requête anonyme ne porte pas d'utilisateur. Refuser, plutôt
+                    // que s'abstenir : une abstention fermerait aussi le verbe aux surfaces sans
+                    // session — console, worker, tâche planifiée.
+                    if (!$token->getUser() instanceof UserInterface) {
+                        return false;
+                    }
+
+                    // À écrire : qui détient ce droit. Tel quel, il reste refusé à tout le monde
+                    // — mais il a désormais un juge, et le docteur ne le nommera plus.
+                    return false;
+                }
+            }
+            PHP, ['{name}' => $name, '{ids}' => $listed]);
+    }
+
+    /**
+     * « InvoicePermission » donne « InvoiceVoter ». Une proposition, et rien de plus : le
+     * paquet ne connaît ni l'arborescence de l'application ni ses conventions de nommage.
+     *
+     * @param class-string $context
+     */
+    private function voterName(string $context): string
+    {
+        $parts = explode('\\', $context);
+        $short = end($parts);
+
+        // Une énumération nommée « Permission » tout court ne laisserait rien à préfixer.
+        $stem = preg_replace('/Permissions?$/', '', $short);
+
+        return ('' === $stem || null === $stem ? $short : $stem).'Voter';
     }
 
     /**
