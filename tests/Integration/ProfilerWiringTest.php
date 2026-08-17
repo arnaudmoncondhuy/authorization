@@ -11,6 +11,7 @@ use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
@@ -123,6 +124,57 @@ final class ProfilerWiringTest extends TestCase
         self::assertStringContainsString('final class InvoiceVoter extends Voter', $panel);
     }
 
+    /**
+     * Les badges du tableau se colorent avec les classes que la feuille de style du profileur
+     * connaît. `label-status-*` n'en fait pas partie hors du menu : un verdict qui la porte sort
+     * en gris, et c'est justement le verdict qu'on vient lire.
+     */
+    public function testTheVerdictCarriesAColourTheProfilerKnows(): void
+    {
+        $container = $this->boot(profiler: true);
+        $this->exercise($container);
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringContainsString('class="label status-error"', $panel);
+        self::assertStringNotContainsString('label-status-', $panel);
+    }
+
+    /**
+     * Une explication n'a de sens qu'à côté de la mention qu'elle éclaire : affichée seule, elle
+     * fait chercher au lecteur une ligne que le tableau ne porte pas.
+     */
+    public function testThePanelExplainsNothingThatIsNotOnScreen(): void
+    {
+        $container = $this->boot(profiler: true);
+        $this->exercise($container);
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringNotContainsString('<code>can()</code>', $panel);
+        self::assertStringNotContainsString('ne veut pas dire', $panel);
+    }
+
+    /** Et elle paraît dès que la mention est là. */
+    public function testThePanelExplainsAnUntouchedDeclaration(): void
+    {
+        $container = $this->boot(profiler: true, verb: FinalizeInvoiceUseCase::class);
+
+        $verb = $container->get(FinalizeInvoiceUseCase::class);
+        self::assertInstanceOf(FinalizeInvoiceUseCase::class, $verb);
+
+        try {
+            $verb('F-1');
+            self::fail('Le verbe aurait dû être arrêté.');
+        } catch (MissingPermission) {
+        }
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringContainsString('pas touché sur cette page', $panel);
+        self::assertStringContainsString('ne veut pas dire', $panel);
+    }
+
     /** Une page qui ne traverse aucun verbe l'écrit, plutôt que d'afficher un tableau vide. */
     public function testThePanelSaysSoWhenNoVerbWasCrossed(): void
     {
@@ -173,9 +225,14 @@ final class ProfilerWiringTest extends TestCase
         return $twig->load(self::PANEL)->renderBlock($block, ['collector' => $collector]);
     }
 
-    private function boot(bool $profiler, bool $judged = true): ContainerInterface
+    /** @param ?class-string $verb un second verbe à exposer, quand le premier ne suffit pas */
+    private function boot(bool $profiler, bool $judged = true, ?string $verb = null): ContainerInterface
     {
         $services = [ViewInvoiceUseCase::class, InvoiceBook::class];
+
+        if (null !== $verb) {
+            $services[] = $verb;
+        }
 
         if ($judged) {
             $services[] = FixturePermissionVoter::class;

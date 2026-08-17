@@ -148,6 +148,26 @@ final class AuthorizationCollectorTest extends TestCase
         self::assertSame(1, $collector->touched());
     }
 
+    /** Ce que la page a seulement consulté se compte à part de ce qu'elle a exigé. */
+    public function testItCountsWhatWasOnlyConsulted(): void
+    {
+        $tracing = $this->tracing(InvoicePermission::View);
+        $tracing->can(InvoicePermission::Finalize);
+        (new ViewInvoiceUseCase($tracing, new InvoiceBook()))('F-1');
+
+        $collector = $this->collect($tracing, [InvoicePermission::View, InvoicePermission::Finalize]);
+
+        self::assertSame(1, $collector->consulted());
+    }
+
+    public function testNothingIsConsultedWhenEveryPermissionWasDemanded(): void
+    {
+        $tracing = $this->tracing(InvoicePermission::View);
+        (new ViewInvoiceUseCase($tracing, new InvoiceBook()))('F-1');
+
+        self::assertSame(0, $this->collect($tracing, [InvoicePermission::View])->consulted());
+    }
+
     /** L'adaptateur qui décide, et non le décorateur qui l'observe. */
     public function testItNamesTheContractThatDecides(): void
     {

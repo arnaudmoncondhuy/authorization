@@ -83,6 +83,13 @@
             </p>
         </div>
     {% else %}
+        <div class="metrics">
+            <div class="metric">
+                <span class="value">{{ collector.touched }}</span>
+                <span class="label">droits touchés</span>
+            </div>
+        </div>
+
         {% for verb in collector.verbs %}
             <h3>
                 {% if verb.name %}
@@ -117,15 +124,15 @@
                                 {% if call.id in verb.declared %}
                                     oui
                                 {% else %}
-                                    <span class="label label-status-warning">non</span>
+                                    <span class="label status-warning">non</span>
                                 {% endif %}
                             </td>
                             <td>{{ call.kind == 'require' ? 'réclamé' : 'consulté' }}</td>
                             <td>
                                 {% if call.granted %}
-                                    <span class="label label-status-success">accordé</span>
+                                    <span class="label status-success">accordé</span>
                                 {% elseif call.kind == 'require' %}
-                                    <span class="label label-status-error">refusé</span>
+                                    <span class="label status-error">refusé</span>
                                 {% else %}
                                     <span class="label">refusé</span>
                                 {% endif %}
@@ -137,24 +144,32 @@
                         <tr>
                             <th>{{ id }}</th>
                             <td>oui</td>
-                            <td colspan="2"><span class="label label-status-warning">pas touché sur cette page</span></td>
+                            <td colspan="2"><span class="label status-warning">pas touché sur cette page</span></td>
                         </tr>
                     {% endfor %}
                 </tbody>
             </table>
         {% endfor %}
 
-        <p class="help">
-            « Pas touché sur cette page » ne veut pas dire « jamais réclamé ». Un verbe déclare
-            souvent un droit fin qu'il ne réclame qu'au moment précis où il sert — antidater une
-            facture, modifier un champ sensible. Savoir si une déclaration n'est <em>jamais</em>
-            honorée demande de lire les corps de méthode : c'est <code>PermissionUsage</code>, en test.
-        </p>
+        {#
+            Chaque explication attend que sa mention soit à l'écran : expliquer un mot que le
+            tableau ne porte pas fait chercher au lecteur une ligne qui n'existe pas.
+        #}
+        {% if collector.absent > 0 %}
+            <p class="help">
+                « Pas touché sur cette page » ne veut pas dire « jamais réclamé ». Un verbe déclare
+                souvent un droit fin qu'il ne réclame qu'au moment précis où il sert — antidater une
+                facture, modifier un champ sensible. Savoir si une déclaration n'est <em>jamais</em>
+                honorée demande de lire les corps de méthode : c'est <code>PermissionUsage</code>, en test.
+            </p>
+        {% endif %}
 
-        <p class="help">
-            Un droit « consulté » vient de <code>can()</code> : le code demande sans exiger, pour masquer
-            un bouton par exemple. Un refus y est normal, et il ne compte pas dans l'icône.
-        </p>
+        {% if collector.consulted > 0 %}
+            <p class="help">
+                Un droit « consulté » vient de <code>can()</code> : le code demande sans exiger, pour masquer
+                un bouton par exemple. Un refus y est normal, et il ne compte pas dans l'icône.
+            </p>
+        {% endif %}
     {% endif %}
 
     <h2>Installation</h2>
@@ -163,10 +178,6 @@
         <div class="metric">
             <span class="value">{{ collector.catalog }}</span>
             <span class="label">droits exigés par le code</span>
-        </div>
-        <div class="metric">
-            <span class="value">{{ collector.touched }}</span>
-            <span class="label">touchés sur cette page</span>
         </div>
         <div class="metric">
             <span class="value">{{ collector.voters }}</span>

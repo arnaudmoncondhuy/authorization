@@ -187,6 +187,18 @@ final class AuthorizationCollector extends DataCollector
         return array_sum(array_map(static fn (array $verb): int => \count($verb['absent']), $this->verbs()));
     }
 
+    /** Les droits que cette page a consultés sans les exiger, tous verbes confondus. */
+    public function consulted(): int
+    {
+        return array_sum(array_map(
+            static fn (array $verb): int => \count(array_filter(
+                $verb['calls'],
+                static fn (array $call): bool => 'require' !== $call['kind'],
+            )),
+            $this->verbs(),
+        ));
+    }
+
     /**
      * La couleur de l'icône, décidée ici plutôt que dans le gabarit : c'est une règle, et une
      * règle se lit et s'éprouve mieux en PHP qu'en Twig.
