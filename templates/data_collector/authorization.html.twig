@@ -1,0 +1,292 @@
+{#
+    Le panneau d'autorisation de la barre de debug.
+
+    Il ne rejoue pas les votes : le panneau « Security » de Symfony les montre déjà, et deux
+    endroits pour une même question finissent par se contredire. Ce qui est ici est ce que lui
+    seul sait dire — quel verbe métier a demandé quoi — et le constat sur les voters, que
+    `authorization:doctor` rend par ailleurs à partir du même examen.
+#}
+{% extends '@WebProfiler/Profiler/layout.html.twig' %}
+
+{% block toolbar %}
+    {% set icon %}
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="7.5" cy="15.5" r="4.5"/>
+            <path d="M10.7 12.3 21 2"/>
+            <path d="m17 6 3 3"/>
+        </svg>
+        <span class="sf-toolbar-value">{{ collector.granted }}/{{ collector.granted + collector.refused }}</span>
+    {% endset %}
+
+    {% set text %}
+        <div class="sf-toolbar-info-piece">
+            <b>Droits réclamés</b>
+            <span>{{ collector.granted + collector.refused }}</span>
+        </div>
+        <div class="sf-toolbar-info-piece">
+            <b>Accordés</b>
+            <span>{{ collector.granted }}</span>
+        </div>
+        <div class="sf-toolbar-info-piece">
+            <b>Refusés</b>
+            <span>{{ collector.refused }}</span>
+        </div>
+        <div class="sf-toolbar-info-piece">
+            <b>Verbes traversés</b>
+            <span>{{ collector.verbs|length }}</span>
+        </div>
+        {% if collector.unjudged is not empty %}
+            <div class="sf-toolbar-info-piece">
+                <b>Droits sans juge</b>
+                <span>{{ collector.unjudged|length }}</span>
+            </div>
+        {% endif %}
+        {% if collector.raised is not empty %}
+            <div class="sf-toolbar-info-piece">
+                <b>Voters qui ont levé</b>
+                <span>{{ collector.raised|length }}</span>
+            </div>
+        {% endif %}
+    {% endset %}
+
+    {{ include('@WebProfiler/Profiler/toolbar_item.html.twig', { link: true, status: collector.status }) }}
+{% endblock %}
+
+{% block menu %}
+    <span class="label {{ collector.status == 'red' ? 'label-status-error' : (collector.status == 'yellow' ? 'label-status-warning' : '') }}">
+        <span class="icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="7.5" cy="15.5" r="4.5"/>
+                <path d="M10.7 12.3 21 2"/>
+                <path d="m17 6 3 3"/>
+            </svg>
+        </span>
+        <strong>Autorisation</strong>
+    </span>
+{% endblock %}
+
+{% block panel %}
+    <h2>Cette page</h2>
+
+    {#
+        Le cœur du panneau, et la seule chose qu'aucun autre outil ne montre : le lien entre un
+        verbe métier et les droits qu'il exige. Un droit se déclare sur le verbe, et une surface
+        ne le redéclare jamais — c'est ce que cette liste rend visible.
+    #}
+    {% if collector.verbs is empty %}
+        <div class="empty">
+            <p>Cette page n'a traversé aucun verbe métier, et n'a donc franchi aucun contrôle de droit.</p>
+            <p>
+                Ce n'est pas une faute en soi — une redirection, un formulaire de connexion ou une page
+                sans donnée sont dans ce cas. Ça en devient une dès qu'elle lit ou écrit quelque chose :
+                le contrôle du conteneur juge ce qu'une porte <em>reçoit</em>, pas ce qu'elle en fait.
+            </p>
+        </div>
+    {% else %}
+        {% for verb in collector.verbs %}
+            <h3>
+                {% if verb.name %}
+                    <span class="font-normal">{{ verb.name|split('\\')|slice(0, -1)|join('\\') }}\</span>{{ verb.name|split('\\')|last }}
+                {% else %}
+                    Hors cas d'usage
+                {% endif %}
+            </h3>
+
+            {% if verb.name is null %}
+                <p class="help">
+                    Ces droits ont été réclamés ailleurs que dans un verbe métier. Le dispositif veut
+                    qu'un droit se déclare et se réclame sur le verbe : réclamé sur une surface, il ne
+                    vaut que pour elle, et la surface suivante devra y penser toute seule.
+                </p>
+            {% endif %}
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Droit</th>
+                        <th>Déclaré sur le verbe</th>
+                        <th>Sur cette page</th>
+                        <th>Verdict</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for call in verb.calls %}
+                        <tr>
+                            <th>{{ call.id }}</th>
+                            <td>
+                                {% if call.id in verb.declared %}
+                                    oui
+                                {% else %}
+                                    <span class="label label-status-warning">non</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ call.kind == 'require' ? 'réclamé' : 'consulté' }}</td>
+                            <td>
+                                {% if call.granted %}
+                                    <span class="label label-status-success">accordé</span>
+                                {% elseif call.kind == 'require' %}
+                                    <span class="label label-status-error">refusé</span>
+                                {% else %}
+                                    <span class="label">refusé</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+
+                    {% for id in verb.absent %}
+                        <tr>
+                            <th>{{ id }}</th>
+                            <td>oui</td>
+                            <td colspan="2"><span class="label label-status-warning">pas touché sur cette page</span></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endfor %}
+
+        <p class="help">
+            « Pas touché sur cette page » ne veut pas dire « jamais réclamé ». Un verbe déclare
+            souvent un droit fin qu'il ne réclame qu'au moment précis où il sert — antidater une
+            facture, modifier un champ sensible. Savoir si une déclaration n'est <em>jamais</em>
+            honorée demande de lire les corps de méthode : c'est <code>PermissionUsage</code>, en test.
+        </p>
+
+        <p class="help">
+            Un droit « consulté » vient de <code>can()</code> : le code demande sans exiger, pour masquer
+            un bouton par exemple. Un refus y est normal, et il ne compte pas dans l'icône.
+        </p>
+    {% endif %}
+
+    <h2>Installation</h2>
+
+    <div class="metrics">
+        <div class="metric">
+            <span class="value">{{ collector.catalog }}</span>
+            <span class="label">droits exigés par le code</span>
+        </div>
+        <div class="metric">
+            <span class="value">{{ collector.touched }}</span>
+            <span class="label">touchés sur cette page</span>
+        </div>
+        <div class="metric">
+            <span class="value">{{ collector.voters }}</span>
+            <span class="label">voters enregistrés</span>
+        </div>
+    </div>
+
+    <table>
+        <tbody>
+            <tr>
+                <th>Contrat</th>
+                <td>{{ collector.contract }}</td>
+            </tr>
+            <tr>
+                <th>Tiers</th>
+                <td>
+                    {% if collector.onBehalf %}
+                        {{ collector.onBehalf }}
+                    {% else %}
+                        non branché — la configuration de sécurité ne déclare aucun fournisseur de comptes
+                    {% endif %}
+                </td>
+            </tr>
+            {% if collector.onBehalf and collector.directory %}
+                <tr>
+                    <th>Annuaire</th>
+                    <td>{{ collector.directory }}</td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    {#
+        À partir d'ici, le même examen que `authorization:doctor`. Les deux le lisent du même
+        `VoterSurvey` : ce qui est rouge ici l'est là-bas, et l'inverse.
+    #}
+    {% if collector.raised is not empty %}
+        <h3>Des voters ont levé une exception pendant l'examen</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Voter</th>
+                    <th>Ce qu'il a levé</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voter, trouble in collector.raised %}
+                    <tr>
+                        <th>{{ voter }}</th>
+                        <td>{{ trouble }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="help">
+            L'examen les interroge avec un jeton sans utilisateur, qui est celui d'une requête anonyme.
+            Un voter qui lève ici lèvera là-bas : la surface rendra une erreur serveur au lieu d'un refus.
+            Garder l'absence d'utilisateur dans <code>supports()</code> ou en tête de
+            <code>voteOnAttribute()</code> ferme les deux à la fois.
+        </p>
+    {% endif %}
+
+    {% if collector.unjudged is not empty %}
+        <h3>Des droits ne sont jugés par personne</h3>
+
+        <p class="help">
+            Ils sont refusés à tout le monde, administrateur compris, et aucune erreur ne le signale
+            nulle part. Un voter doit reconnaître ces identités dans son <code>supports()</code>.
+            {% if collector.raised is not empty %}
+                <strong>Un voter au moins n'a pas pu être examiné : cette liste peut nommer un droit
+                qu'il aurait pris en charge.</strong>
+            {% endif %}
+        </p>
+
+        <ul>
+            {% for id in collector.unjudged %}
+                <li>{{ id }}</li>
+            {% endfor %}
+        </ul>
+
+        <h4>Le voter qui manque</h4>
+
+        <p class="help">
+            Le nom et l'espace de noms sont une proposition ; les identités ne le sont pas — ce sont
+            celles qui manquent de juge, et elles seules. Reprendre l'énumération entière donnerait un
+            second juge aux droits qui en ont déjà un, ce qui les élargit au lieu de les fermer.
+        </p>
+
+        {% for path, sketch in collector.sketches %}
+            <h5>{{ path }}</h5>
+            <pre class="code"><code>{{ sketch }}</code></pre>
+        {% endfor %}
+    {% endif %}
+
+    {% if collector.shared is not empty %}
+        <h3>Des droits sont jugés par plusieurs voters</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Droit</th>
+                    <th>Voters</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for id, voters in collector.shared %}
+                    <tr>
+                        <th>{{ id }}</th>
+                        <td>{{ voters|join(', ') }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="help">
+            Sous la stratégie « affirmative », qui est celle de Symfony par défaut, il suffit qu'un seul
+            accorde : le recouvrement élargit les droits, il ne les restreint pas. Dériver tous les
+            <code>supports()</code> d'une même répartition ferme la question.
+        </p>
+    {% endif %}
+{% endblock %}

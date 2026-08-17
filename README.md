@@ -58,6 +58,12 @@ Deux contrôles ne peuvent pas arrêter la compilation et se jouent donc ailleur
 - savoir si un droit trouve **quelqu'un pour en juger** demande d'interroger les voters
   installés — `authorization:doctor`, en ligne de commande.
 
+Il reste un troisième endroit où regarder, qui ne contrôle rien : là où `WebProfilerBundle` est
+enregistré, le paquet ajoute **un panneau à la barre de debug**. Il montre, page par page, quel
+verbe métier a été traversé, ce qu'il déclare et ce qu'il a réclamé — le chaînon que le panneau
+« Security » de Symfony ne connaît pas. Il y joint le constat du docteur, produit par le même
+examen, pour que la barre et la ligne de commande ne puissent pas se contredire.
+
 ## Ce que le paquet ne fait pas
 
 **Il ne décide rien.** Savoir si l'utilisateur courant détient `invoice.finalize` reste
@@ -112,8 +118,10 @@ branches.
 | `symfony/config` | le chargement de la configuration du bundle |
 | `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
 | `symfony/event-dispatcher` | seul lecteur du tag `kernel.event_listener` que pose le paquet |
-| `symfony/http-kernel` | la classe de bundle, et l'écouteur qui traduit un refus en 403 |
+| `symfony/http-kernel` | la classe de bundle, l'écouteur qui traduit un refus en 403, et le collecteur du profileur |
+| `symfony/http-foundation` | la signature du collecteur. Déjà installé — `symfony/http-kernel` en dépend — et déclaré ici parce que le paquet le cite |
 | `symfony/console` | *suggéré* — sans lui, les deux commandes n'existent pas |
+| `symfony/web-profiler-bundle` | *suggéré* — sans lui, ni panneau ni décorateur : le contrat reste nu |
 
 Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,
 `MissingPermission`, `PermissionCatalog`, `UserAuthorizer` — est du PHP nu, sans une seule dépendance. C'est ce

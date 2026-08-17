@@ -23,6 +23,7 @@
         "symfony/config": "^7.3 || ^8.1",
         "symfony/dependency-injection": "^7.3 || ^8.1",
         "symfony/event-dispatcher": "^7.3 || ^8.1",
+        "symfony/http-foundation": "^7.3 || ^8.1",
         "symfony/http-kernel": "^7.3 || ^8.1",
         "symfony/security-core": "^7.3 || ^8.1"
     },
@@ -38,10 +39,13 @@
         "symfony/console": "^7.3 || ^8.1",
         "symfony/framework-bundle": "^7.3 || ^8.1",
         "symfony/runtime": "^7.3 || ^8.1",
-        "symfony/security-bundle": "^7.3 || ^8.1"
+        "symfony/security-bundle": "^7.3 || ^8.1",
+        "symfony/twig-bundle": "^7.3 || ^8.1",
+        "symfony/web-profiler-bundle": "^7.3 || ^8.1"
     },
     "suggest": {
-        "symfony/console": "Pour les commandes authorization:permissions et authorization:doctor."
+        "symfony/console": "Pour les commandes authorization:permissions et authorization:doctor.",
+        "symfony/web-profiler-bundle": "Pour le panneau d'autorisation dans la barre de debug."
     },
     "autoload": {
         "psr-4": {

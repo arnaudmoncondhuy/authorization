@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Kernel;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
+use ArnaudMoncondhuy\Authorization\Bridge\AuthorizationCollector;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use ArnaudMoncondhuy\Authorization\Bridge\PermissionsCommand;
+use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\UserAuthorizer;
@@ -31,6 +33,8 @@ final class ExposeForTestingPass implements CompilerPassInterface
             SystemIdentity::class,
             DoctorCommand::class,
             PermissionsCommand::class,
+            AuthorizationCollector::class,
+            TracingAuthorizer::class,
         ];
 
         foreach ($services as $service) {

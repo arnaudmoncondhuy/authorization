@@ -117,6 +117,13 @@ final class AuthorizationBundle extends AbstractBundle
             if (class_exists(Command::class)) {
                 $configurator->import('../config/doctor.php');
             }
+
+            // Le panneau de la barre de debug. Conditionné au bundle et non à `kernel.debug` :
+            // une application n'inscrit WebProfilerBundle qu'en dev et en test, et c'est ce
+            // qu'on veut dire ici. Sans lui, ni collecteur ni décorateur — le contrat reste nu.
+            if (isset($bundles['WebProfilerBundle'])) {
+                $configurator->import('../config/profiler.php');
+            }
         }
 
         if (class_exists(ExceptionEvent::class)) {

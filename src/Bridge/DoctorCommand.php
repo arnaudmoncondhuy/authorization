@@ -73,7 +73,7 @@ final class DoctorCommand extends Command
         $console = new SymfonyStyle($input, $output);
         $coverage = $this->survey->examine();
 
-        $console->writeln(\sprintf('Contrat  : %s', $this->access::class));
+        $console->writeln(\sprintf('Contrat  : %s', $this->contract()));
         $console->writeln(\sprintf('Tiers    : %s', $this->onBehalf
             ?? 'non branché — la configuration de sécurité ne déclare aucun fournisseur de comptes'));
 
@@ -152,6 +152,18 @@ final class DoctorCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * L'adaptateur qui décide.
+     *
+     * Là où le profileur est monté, {@see TracingAuthorizer} a pris la place du contrat pour
+     * l'observer. Le nommer ici dirait « contrat » de celui qui ne décide rien, et cacherait
+     * celui qui décide — la commande tourne en dev, où le décorateur est justement là.
+     */
+    private function contract(): string
+    {
+        return $this->access instanceof TracingAuthorizer ? $this->access->wraps() : $this->access::class;
     }
 
     /**

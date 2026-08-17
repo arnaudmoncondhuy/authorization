@@ -235,6 +235,46 @@ Ce qu'il ne voit pas non plus : un droit jugé par le mauvais modèle. Si l'écr
 cocher sur un rôle quand seul un groupe l'accorde, le droit a bien un juge — il est seulement
 accordé au mauvais endroit.
 
+## Voir le dispositif à l'œuvre
+
+Ce n'est pas un septième geste : il n'y a rien à monter. Là où `WebProfilerBundle` est
+enregistré — c'est-à-dire en dev et en test, et nulle part ailleurs — le paquet ajoute un
+panneau à la barre de debug, et une icône qui porte le nombre de droits accordés sur réclamés.
+
+```
+🔑 2/3     rouge  — un droit a été refusé sur cette page, ou un droit n'a pas de juge,
+                    ou un voter a levé
+🔑 4/4     jaune  — un verbe déclare un droit que la page n'a pas touché,
+                    ou un droit est jugé par plusieurs voters
+🔑 4/4     gris   — rien à signaler
+```
+
+Le panneau répond à ce qu'aucun autre outil ne sait dire : **quel verbe métier a demandé quoi**.
+
+```
+FinalizeInvoiceUseCase
+  invoice.finalize    déclaré · réclamé            accordé
+  invoice.backdate    déclaré · pas touché sur cette page
+```
+
+Le panneau « Security » de Symfony montre déjà les votes, et le paquet ne les rejoue pas : ce
+qu'il montre, lui, c'est le chaînon entre une page et le verbe qui l'a gardée. C'est là que se
+comprend le dispositif, et c'est ce qui manque au début — on voit un refus, pas le verbe qui le
+demandait.
+
+**« Pas touché sur cette page » ne veut pas dire « jamais réclamé ».** Un verbe déclare souvent
+un droit fin qu'il ne réclame qu'au moment où il sert. Savoir si une déclaration n'est *jamais*
+honorée demande de lire les corps de méthode : c'est l'étape 5, en test.
+
+Le panneau reprend enfin le constat du docteur — les droits sans juge, le squelette du voter qui
+manque, les recouvrements. **Le même examen les produit**, et non un second : deux examens
+séparés finiraient par se contredire, et rien ne dirait lequel a raison. Ce qui est rouge dans la
+barre l'est en ligne de commande, et l'inverse.
+
+Il a un coût, et il vaut d'être su : l'examen des voters est rejoué à chaque page — un vote par
+droit et par voter, avec un jeton vide. C'est négligeable en développement, mais un voter à effet
+de bord sera bien appelé.
+
 ## La seule clé de configuration
 
 Les six gestes tiennent sans écrire une ligne de configuration : le paquet se câble sur ce que

@@ -7,6 +7,8 @@ namespace ArnaudMoncondhuy\Authorization\Tests\Kernel;
 use ArnaudMoncondhuy\Authorization\AuthorizationBundle;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
+use Symfony\Bundle\TwigBundle\TwigBundle;
+use Symfony\Bundle\WebProfilerBundle\WebProfilerBundle;
 use Symfony\Component\Config\Loader\LoaderInterface;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -40,12 +42,17 @@ final class AuthorizationTestKernel extends Kernel
      * @param ?string              $userProvider le fournisseur de comptes que l'application nomme
      *                                           sous `authorization.user_provider`. Nul pour ne rien
      *                                           configurer du tout, ce qui est le cas courant
+     * @param bool                 $profiler     vrai pour l'application de développement : WebProfilerBundle
+     *                                           enregistré, et le profileur qui collecte. C'est à ce
+     *                                           bundle, et non au mode debug, que le paquet conditionne
+     *                                           son panneau
      */
     public function __construct(
         private readonly array $services = [],
         private readonly array $providers = ['in_memory' => ['memory' => null]],
         private readonly bool $security = true,
         private readonly ?string $userProvider = null,
+        private readonly bool $profiler = false,
     ) {
         // Hors debug : ce mode installe des gestionnaires d'erreurs globaux qu'un processus de
         // test ne doit pas hériter d'un cas au suivant. La compilation du conteneur, seule
@@ -76,6 +83,13 @@ final class AuthorizationTestKernel extends Kernel
 
         if ($this->security) {
             yield new SecurityBundle();
+        }
+
+        // Les deux ensemble : WebProfilerBundle ne se monte pas sans Twig, dont il tire ses
+        // gabarits — et le panneau du paquet est l'un d'eux.
+        if ($this->profiler) {
+            yield new TwigBundle();
+            yield new WebProfilerBundle();
         }
 
         yield new AuthorizationBundle();
@@ -110,6 +124,24 @@ final class AuthorizationTestKernel extends Kernel
                 }
 
                 $container->loadFromExtension('security', $security);
+            }
+
+            // Le profileur doit collecter pour que le tag `data_collector` soit lu : désactivé,
+            // la passe qui l'honore ne tourne pas, et le collecteur du paquet serait retiré du
+            // conteneur comme un service que personne n'utilise.
+            //
+            // La barre elle-même est éteinte : elle exige un routeur pour bâtir le lien vers le
+            // profileur, et ce qui est éprouvé ici est le câblage, pas l'affichage.
+            if ($this->profiler) {
+                $container->loadFromExtension('framework', [
+                    'profiler' => ['enabled' => true, 'collect' => true],
+                    // WebProfilerBundle en tire le lien vers le profileur, et le réclame donc
+                    // même sur une application qui ne sert aucune page. La ressource est vide,
+                    // et c'est ce qu'il faut dire : ce qui est éprouvé ici est le câblage.
+                    'router' => ['resource' => __DIR__.'/routing.php', 'type' => 'php', 'utf8' => true],
+                ]);
+                $container->loadFromExtension('twig', []);
+                $container->loadFromExtension('web_profiler', ['toolbar' => false]);
             }
 
             // Rien n'est posé quand l'application ne nomme pas son annuaire : la clé absente
@@ -152,6 +184,7 @@ final class AuthorizationTestKernel extends Kernel
             Kernel::VERSION,
             json_encode($this->providers),
             $this->security ? 'security' : 'bare',
+            $this->profiler ? 'profiler' : 'sans profileur',
             $this->userProvider ?? 'toute la chaîne',
             ...$this->services,
         ]));
