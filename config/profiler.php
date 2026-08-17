@@ -7,6 +7,7 @@ use ArnaudMoncondhuy\Authorization\Bridge\AuthorizationCollector;
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSketch;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSurvey;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseProofWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -46,6 +47,9 @@ return static function (ContainerConfigurator $container): void {
                 // déjà `config/doctor.php`.
                 param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PARAMETER),
                 param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PROVIDER_PARAMETER),
+                // Et ce qui juge une preuve d'identité, pour la même raison : le nom suffit à
+                // le nommer, et l'injecter le compterait utilisé.
+                param(RefuseProofWithoutJudgePass::JUDGE_PARAMETER),
             ])
             ->tag('data_collector', [
                 'id' => AuthorizationCollector::NAME,

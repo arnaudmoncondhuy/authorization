@@ -6,7 +6,9 @@ use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSketch;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSurvey;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseProofWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
+use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
@@ -26,6 +28,7 @@ return static function (ContainerConfigurator $container): void {
                 service(VoterSurvey::class),
                 service(VoterSketch::class),
                 service(Authorizer::class),
+                service(PermissionCatalog::class),
                 // Le nom de l'adaptateur, pas l'adaptateur : l'injecter suffirait à le compter
                 // utilisé, et RefuseUserAuthorizerWithoutProviderPass ferait alors échouer la
                 // compilation de toute application sans fournisseur de comptes — la commande
@@ -33,6 +36,10 @@ return static function (ContainerConfigurator $container): void {
                 param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PARAMETER),
                 // Et le nom de l'annuaire où il cherche, pour la même raison.
                 param(RefuseUserAuthorizerWithoutProviderPass::ON_BEHALF_PROVIDER_PARAMETER),
+                // Ce qui juge une preuve d'identité. Le nom, encore : le service n'existe pas
+                // dans une application qui n'exige aucune preuve, et la commande doit tourner
+                // là comme ailleurs.
+                param(RefuseProofWithoutJudgePass::JUDGE_PARAMETER),
             ])
             ->tag('console.command')
     ;

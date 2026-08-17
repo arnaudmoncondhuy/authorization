@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
+use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\InvoicePermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\StockPermission;
 use PHPUnit\Framework\TestCase;
@@ -65,5 +66,32 @@ final class PermissionCatalogTest extends TestCase
 
         self::assertTrue($catalog->isRequired('fixture.invoice.view'));
         self::assertFalse($catalog->isRequired('invoice.renamed'));
+    }
+
+    /**
+     * Un droit qui n'exige rien de plus et un droit qui n'existe pas se traitent pareil : c'est
+     * la détention du droit, vérifiée avant, qui sépare les deux cas.
+     */
+    public function testAPermissionWithoutAStatedProofDemandsNone(): void
+    {
+        $catalog = new PermissionCatalog([InvoicePermission::View]);
+
+        self::assertSame(Proof::None, $catalog->proofFor('fixture.invoice.view'));
+        self::assertSame(Proof::None, $catalog->proofFor('inconnu'));
+    }
+
+    /**
+     * La liste que le docteur et le panneau affichent : elle ne retient que ce qui exige, sans
+     * quoi ils énuméreraient tout le catalogue pour ne rien dire.
+     */
+    public function testItListsOnlyThePermissionsThatDemandAProof(): void
+    {
+        $catalog = new PermissionCatalog(
+            [InvoicePermission::View, InvoicePermission::Finalize],
+            ['fixture.invoice.finalize' => Proof::Recent, 'fixture.invoice.view' => Proof::None],
+        );
+
+        self::assertSame(Proof::Recent, $catalog->proofFor('fixture.invoice.finalize'));
+        self::assertSame(['fixture.invoice.finalize' => Proof::Recent], $catalog->proofs());
     }
 }

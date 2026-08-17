@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
+use ArnaudMoncondhuy\Authorization\InsufficientProof;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\UseCase;
@@ -28,7 +29,7 @@ final class TracingAuthorizer implements Authorizer
      */
     private const int DEPTH = 8;
 
-    /** @var list<array{id: string, kind: string, granted: bool, caller: ?class-string}> */
+    /** @var list<array{id: string, kind: string, granted: bool, unproven: ?string, caller: ?class-string}> */
     private array $calls = [];
 
     public function __construct(private readonly Authorizer $inner)
@@ -55,6 +56,13 @@ final class TracingAuthorizer implements Authorizer
             $this->note($permission, 'require', false);
 
             throw $refusal;
+        } catch (InsufficientProof $detour) {
+            // Le droit était accordé : ce qui manque est la preuve, et c'est tout ce qui
+            // sépare une page à réparer d'une page qui fait son travail. Sans cette
+            // distinction, le panneau afficherait un refus là où il y a un détour.
+            $this->note($permission, 'require', false, $detour->required->value);
+
+            throw $detour;
         }
 
         $this->note($permission, 'require', true);
@@ -74,7 +82,7 @@ final class TracingAuthorizer implements Authorizer
         return $this->inner instanceof self ? $this->inner->wraps() : $this->inner::class;
     }
 
-    /** @return list<array{id: string, kind: string, granted: bool, caller: ?class-string}> */
+    /** @return list<array{id: string, kind: string, granted: bool, unproven: ?string, caller: ?class-string}> */
     public function calls(): array
     {
         return $this->calls;
@@ -89,12 +97,17 @@ final class TracingAuthorizer implements Authorizer
         $this->calls = [];
     }
 
-    private function note(Permission $permission, string $kind, bool $granted): void
+    /**
+     * @param ?string $unproven le niveau de preuve exigé, quand c'est lui qui a manqué et non
+     *                          le droit
+     */
+    private function note(Permission $permission, string $kind, bool $granted, ?string $unproven = null): void
     {
         $this->calls[] = [
             'id' => $permission->id(),
             'kind' => $kind,
             'granted' => $granted,
+            'unproven' => $unproven,
             'caller' => $this->callingUseCase(),
         ];
     }

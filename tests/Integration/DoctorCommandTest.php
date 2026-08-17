@@ -10,9 +10,11 @@ use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\OverlappingPermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\PartialPermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\ProvenIdentity;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\UnguardedPermissionVoter;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\RevealInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use PHPUnit\Framework\TestCase;
@@ -244,6 +246,35 @@ final class DoctorCommandTest extends TestCase
         return $this->examine([], ...$services);
     }
 
+    /**
+     * L'installation ne se raconte pas entière si la moitié tient à un autre paquet : une
+     * exigence posée sur un cas d'usage ne se voit nulle part ailleurs sans ouvrir son code.
+     */
+    public function testItNamesThePermissionsThatDemandAProofAndWhatJudgesThem(): void
+    {
+        $tester = $this->examineWith(new AuthorizationTestKernel(
+            [RevealInvoiceUseCase::class, FixturePermissionVoter::class],
+            judge: ProvenIdentity::class,
+        ));
+
+        $report = $tester->getDisplay();
+
+        self::assertStringContainsString('fixture.invoice.backdate → recent', $report);
+        self::assertStringContainsString('fixture.invoice.view → strong', $report);
+        self::assertStringContainsString(ProvenIdentity::class, $report);
+    }
+
+    /**
+     * Le silence n'est pas une réponse : une application qui n'exige aucune preuve doit le lire
+     * en toutes lettres, sans quoi elle ne saura pas si la question a été posée.
+     */
+    public function testItSaysSoWhenNoPermissionDemandsAProof(): void
+    {
+        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
+
+        self::assertStringContainsString('aucun droit n\'exige', $tester->getDisplay());
+    }
+
     /** @param class-string ...$services */
     private function diagnoseStrictly(string ...$services): CommandTester
     {
@@ -256,7 +287,19 @@ final class DoctorCommandTest extends TestCase
      */
     private function examine(array $options, string ...$services): CommandTester
     {
-        $command = $this->boot(...$services)->get(DoctorCommand::class);
+        return $this->tester($this->boot(...$services), $options);
+    }
+
+    /** Là où l'application se monte autrement que par sa liste de services — avec un juge. */
+    private function examineWith(AuthorizationTestKernel $kernel): CommandTester
+    {
+        return $this->tester($this->start($kernel), []);
+    }
+
+    /** @param array<string, bool> $options */
+    private function tester(ContainerInterface $container, array $options): CommandTester
+    {
+        $command = $container->get(DoctorCommand::class);
         self::assertInstanceOf(DoctorCommand::class, $command);
 
         $tester = new CommandTester($command);

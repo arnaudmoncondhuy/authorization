@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization\Bridge;
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\CallsNoUseCase;
 use ArnaudMoncondhuy\Authorization\Permission;
+use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -47,13 +48,18 @@ final class DoctorCommand extends Command
      * @param ?string       $directory le service de fournisseur de comptes où cet adaptateur
      *                                 cherche : la chaîne de tous ceux que l'application
      *                                 déclare, ou le seul qu'elle a nommé
+     * @param ?string       $judge     ce qui juge une preuve d'identité, ou nul quand rien ne
+     *                                 le fait — et alors aucun droit n'en exige, puisque la
+     *                                 compilation s'y serait opposée
      */
     public function __construct(
         private readonly VoterSurvey $survey,
         private readonly VoterSketch $sketch,
         private readonly Authorizer $access,
+        private readonly PermissionCatalog $catalog,
         private readonly ?string $onBehalf = null,
         private readonly ?string $directory = null,
+        private readonly ?string $judge = null,
     ) {
         parent::__construct();
     }
@@ -97,6 +103,9 @@ final class DoctorCommand extends Command
         }
 
         $console->writeln(\sprintf('Droits   : %d', \count($permissions)));
+
+        $this->reportProofs($console);
+
         $console->newLine();
 
         $raised = $coverage->raised();
@@ -152,6 +161,37 @@ final class DoctorCommand extends Command
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Les droits qui exigent une preuve d'identité, et ce qui la juge.
+     *
+     * N'échoue jamais, et ne le peut pas : une exigence sans juge arrête la compilation, donc
+     * une commande qui s'exécute a déjà la réponse. Elle informe, parce qu'une exigence posée
+     * sur un cas d'usage ne se voit nulle part ailleurs sans ouvrir son code — et parce que
+     * l'installation ne se raconte pas entière si la moitié tient à un autre paquet.
+     */
+    private function reportProofs(SymfonyStyle $console): void
+    {
+        $proofs = $this->catalog->proofs();
+
+        if ([] === $proofs) {
+            $console->writeln('Preuves  : aucun droit n\'exige que l\'identité soit prouvée davantage');
+
+            return;
+        }
+
+        $console->writeln(\sprintf('Preuves  : %d droit(s), jugé(s) par %s', \count($proofs), $this->judge ?? '—'));
+        $console->newLine();
+
+        foreach ($proofs as $id => $proof) {
+            $console->writeln(\sprintf('  %s → %s', $id, $proof->value));
+        }
+
+        $console->writeln('');
+        $console->writeln('Ce que ces niveaux recouvrent est l\'affaire du paquet qui les juge : lui seul');
+        $console->writeln('sait quels moyens comptent et depuis quand ils ont été présentés. Son propre');
+        $console->writeln('examen dira si un compte peut les atteindre.');
     }
 
     /**

@@ -6,6 +6,8 @@ use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
+use ArnaudMoncondhuy\Authorization\PermissionCatalog;
+use ArnaudMoncondhuy\Authorization\ProofOfIdentity;
 use ArnaudMoncondhuy\Authorization\Scope\SystemIdentity;
 use ArnaudMoncondhuy\Authorization\UserAuthorizer;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -38,7 +40,16 @@ return static function (ContainerConfigurator $container): void {
 
     $container->services()
         ->set(SecurityAuthorizer::class)
-            ->args([service(AuthorizationCheckerInterface::class)])
+            ->args([
+                service(AuthorizationCheckerInterface::class),
+                service(PermissionCatalog::class),
+
+                // Ce qui juge une preuve d'identité, quand un paquet sait le faire. Nul
+                // ailleurs, et sans conséquence : un droit qui n'exige rien de plus que d'être
+                // détenu ne pose jamais la question. Celui qui l'exige sans juge n'atteint pas
+                // l'exécution — RefuseProofWithoutJudgePass arrête la compilation.
+                service(ProofOfIdentity::class)->nullOnInvalid(),
+            ])
 
         // C'est l'alias, et non la classe, qu'un cas d'usage reçoit : il ne cite jamais
         // l'adaptateur, seulement le contrat.

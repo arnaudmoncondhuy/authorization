@@ -9,10 +9,14 @@ use ArnaudMoncondhuy\Authorization\Bridge\AuthorizationCollector;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
+use ArnaudMoncondhuy\Authorization\InsufficientProof;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\FixturePermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\GrantingPermissionVoter;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\ProvenIdentity;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\RevealInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use PHPUnit\Framework\TestCase;
@@ -65,7 +69,7 @@ final class ProfilerWiringTest extends TestCase
         self::assertInstanceOf(TracingAuthorizer::class, $traced);
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'caller' => ViewInvoiceUseCase::class]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'caller' => ViewInvoiceUseCase::class]],
             $traced->calls(),
         );
     }
@@ -175,6 +179,61 @@ final class ProfilerWiringTest extends TestCase
         self::assertStringContainsString('ne veut pas dire', $panel);
     }
 
+    /**
+     * Un détour n'est pas un refus, et le panneau doit le dire autrement : une page qui fait
+     * exactement son travail s'afficherait sinon comme une page cassée.
+     */
+    public function testThePanelTellsADetourFromARefusal(): void
+    {
+        $container = $this->boot(
+            profiler: true,
+            verb: RevealInvoiceUseCase::class,
+            judge: ProvenIdentity::class,
+            granting: true,
+        );
+
+        $verb = $container->get(RevealInvoiceUseCase::class);
+        self::assertInstanceOf(RevealInvoiceUseCase::class, $verb);
+
+        try {
+            $verb();
+            self::fail('Le verbe aurait dû être arrêté.');
+        } catch (InsufficientProof) {
+        }
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringContainsString('preuve « strong » redemandée', $panel);
+        self::assertStringNotContainsString('class="label status-error"', $panel);
+        self::assertStringContainsString('n\'est pas un refus', $panel);
+    }
+
+    /** Et l'installation dit ce qui juge, avec les droits qui l'occupent. */
+    public function testThePanelNamesWhatJudgesAProof(): void
+    {
+        $container = $this->boot(
+            profiler: true,
+            verb: RevealInvoiceUseCase::class,
+            judge: ProvenIdentity::class,
+        );
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringContainsString(ProvenIdentity::class, $panel);
+        self::assertStringContainsString('fixture.invoice.backdate', $panel);
+    }
+
+    /** Une application sans exigence de preuve n'affiche ni le tableau ni un juge inventé. */
+    public function testThePanelSaysSoWhenNothingDemandsAProof(): void
+    {
+        $container = $this->boot(profiler: true);
+
+        $panel = $this->render($container, 'panel');
+
+        self::assertStringContainsString('aucun droit n\'exige', $panel);
+        self::assertStringNotContainsString('Niveau exigé', $panel);
+    }
+
     /** Une page qui ne traverse aucun verbe l'écrit, plutôt que d'afficher un tableau vide. */
     public function testThePanelSaysSoWhenNoVerbWasCrossed(): void
     {
@@ -225,20 +284,33 @@ final class ProfilerWiringTest extends TestCase
         return $twig->load(self::PANEL)->renderBlock($block, ['collector' => $collector]);
     }
 
-    /** @param ?class-string $verb un second verbe à exposer, quand le premier ne suffit pas */
-    private function boot(bool $profiler, bool $judged = true, ?string $verb = null): ContainerInterface
-    {
+    /**
+     * @param ?class-string $verb     un second verbe à exposer, quand le premier ne suffit pas
+     * @param ?class-string $judge    ce qui juge une preuve d'identité, pour les pages où le
+     *                                droit était détenu et l'identité pas assez prouvée
+     * @param bool          $granting vrai pour accorder les droits : sans cela, c'est le droit
+     *                                qui manque et le détour ne se joue jamais
+     */
+    private function boot(
+        bool $profiler,
+        bool $judged = true,
+        ?string $verb = null,
+        ?string $judge = null,
+        bool $granting = false,
+    ): ContainerInterface {
         $services = [ViewInvoiceUseCase::class, InvoiceBook::class];
 
         if (null !== $verb) {
             $services[] = $verb;
         }
 
-        if ($judged) {
+        if ($granting) {
+            $services[] = GrantingPermissionVoter::class;
+        } elseif ($judged) {
             $services[] = FixturePermissionVoter::class;
         }
 
-        $this->kernel = new AuthorizationTestKernel($services, profiler: $profiler);
+        $this->kernel = new AuthorizationTestKernel($services, profiler: $profiler, judge: $judge);
         $this->kernel->boot();
 
         $container = $this->kernel->getContainer()->get('test.service_container');

@@ -6,6 +6,7 @@ namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
+use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\RequiresPermission;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -41,6 +42,9 @@ final class AuthorizationCollector extends DataCollector
      *                                 qu'expose {@see \ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass}
      * @param ?string       $directory le service de fournisseur de comptes où cet adaptateur
      *                                 cherche
+     * @param ?string       $judge     ce qui juge une preuve d'identité, ou nul quand rien ne
+     *                                 le fait — auquel cas aucun droit n'en exige, la
+     *                                 compilation s'y opposerait
      */
     public function __construct(
         private readonly TracingAuthorizer $traced,
@@ -49,6 +53,7 @@ final class AuthorizationCollector extends DataCollector
         private readonly PermissionCatalog $catalog,
         private readonly ?string $onBehalf = null,
         private readonly ?string $directory = null,
+        private readonly ?string $judge = null,
     ) {
     }
 
@@ -61,15 +66,23 @@ final class AuthorizationCollector extends DataCollector
         $required = array_filter($calls, static fn (array $call): bool => 'require' === $call['kind']);
         $granted = array_filter($required, static fn (array $call): bool => $call['granted']);
 
+        // Compté à part de ce qui est refusé, et c'est toute la différence : un droit refusé
+        // est une page à réparer ou un compte à équiper, un détour est le dispositif qui fait
+        // son travail. Les additionner ferait passer le second pour le premier.
+        $detoured = array_filter($required, static fn (array $call): bool => null !== $call['unproven']);
+
         $this->data = [
             'contract' => $this->traced->wraps(),
             'onBehalf' => $this->onBehalf,
             'directory' => $this->directory,
+            'judge' => $this->judge,
+            'proofs' => array_map(static fn (Proof $proof): string => $proof->value, $this->catalog->proofs()),
+            'detoured' => \count($detoured),
             'voters' => $coverage->voters,
             'catalog' => \count($this->catalog->ids()),
             'touched' => \count(array_unique(array_column($calls, 'id'))),
             'granted' => \count($granted),
-            'refused' => \count($required) - \count($granted),
+            'refused' => \count($required) - \count($granted) - \count($detoured),
             'verbs' => $this->verbsOf($calls),
             'unjudged' => array_map(static fn (Permission $permission): string => $permission->id(), $unjudged),
             'shared' => $coverage->shared(),
@@ -86,11 +99,11 @@ final class AuthorizationCollector extends DataCollector
     /**
      * Les verbes traversés, dans l'ordre où ils ont demandé pour la première fois.
      *
-     * @return list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool}>, absent: list<string>}>
+     * @return list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool, unproven: ?string}>, absent: list<string>}>
      */
     public function verbs(): array
     {
-        /** @var list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool}>, absent: list<string>}> $verbs */
+        /** @var list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool, unproven: ?string}>, absent: list<string>}> $verbs */
         $verbs = $this->data['verbs'] ?? [];
 
         return $verbs;
@@ -142,6 +155,36 @@ final class AuthorizationCollector extends DataCollector
     public function refused(): int
     {
         return (int) ($this->data['refused'] ?? 0);
+    }
+
+    /**
+     * Les droits détenus dont l'identité n'était pas prouvée assez : le dispositif a demandé
+     * un détour, il n'a rien refusé.
+     */
+    public function detoured(): int
+    {
+        return (int) ($this->data['detoured'] ?? 0);
+    }
+
+    /**
+     * Les droits qui exigent plus que d'être détenus, avec le niveau demandé.
+     *
+     * @return array<string, string>
+     */
+    public function proofs(): array
+    {
+        /** @var array<string, string> $proofs */
+        $proofs = $this->data['proofs'] ?? [];
+
+        return $proofs;
+    }
+
+    /** Ce qui juge une preuve d'identité, ou nul quand aucun droit n'en exige. */
+    public function judge(): ?string
+    {
+        $judge = $this->data['judge'] ?? null;
+
+        return \is_string($judge) ? $judge : null;
     }
 
     /** Les droits que le code exige, tous contextes confondus. */
@@ -226,13 +269,13 @@ final class AuthorizationCollector extends DataCollector
      * L'ordre est celui de la première demande : c'est celui dans lequel la page s'est jouée,
      * et le relire trié le rendrait moins fidèle à ce qui s'est passé.
      *
-     * @param list<array{id: string, kind: string, granted: bool, caller: ?class-string}> $calls
+     * @param list<array{id: string, kind: string, granted: bool, unproven: ?string, caller: ?class-string}> $calls
      *
-     * @return list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool}>, absent: list<string>}>
+     * @return list<array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool, unproven: ?string}>, absent: list<string>}>
      */
     private function verbsOf(array $calls): array
     {
-        /** @var array<string, array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool}>, absent: list<string>}> $verbs */
+        /** @var array<string, array{name: ?string, declared: list<string>, calls: list<array{id: string, kind: string, granted: bool, unproven: ?string}>, absent: list<string>}> $verbs */
         $verbs = [];
 
         foreach ($calls as $call) {
@@ -248,7 +291,12 @@ final class AuthorizationCollector extends DataCollector
                 'absent' => [],
             ];
 
-            $verbs[$key]['calls'][] = ['id' => $call['id'], 'kind' => $call['kind'], 'granted' => $call['granted']];
+            $verbs[$key]['calls'][] = [
+                'id' => $call['id'],
+                'kind' => $call['kind'],
+                'granted' => $call['granted'],
+                'unproven' => $call['unproven'],
+            ];
         }
 
         foreach ($verbs as $key => $verb) {

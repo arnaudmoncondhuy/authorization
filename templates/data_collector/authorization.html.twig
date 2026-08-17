@@ -31,6 +31,12 @@
             <b>Refusés</b>
             <span>{{ collector.refused }}</span>
         </div>
+        {% if collector.detoured > 0 %}
+            <div class="sf-toolbar-info-piece">
+                <b>Preuve redemandée</b>
+                <span>{{ collector.detoured }}</span>
+            </div>
+        {% endif %}
         <div class="sf-toolbar-info-piece">
             <b>Verbes traversés</b>
             <span>{{ collector.verbs|length }}</span>
@@ -131,6 +137,9 @@
                             <td>
                                 {% if call.granted %}
                                     <span class="label status-success">accordé</span>
+                                {% elseif call.unproven %}
+                                    {# Le droit était détenu : ce qui manque est la preuve. #}
+                                    <span class="label status-warning">preuve « {{ call.unproven }} » redemandée</span>
                                 {% elseif call.kind == 'require' %}
                                     <span class="label status-error">refusé</span>
                                 {% else %}
@@ -170,6 +179,15 @@
                 un bouton par exemple. Un refus y est normal, et il ne compte pas dans l'icône.
             </p>
         {% endif %}
+
+        {% if collector.detoured > 0 %}
+            <p class="help">
+                Une preuve redemandée n'est pas un refus : le droit était détenu, c'est l'identité qui
+                n'était pas prouvée assez. La surface renvoie vers l'écran qui la redemande, puis revient.
+                <code>can()</code> ne s'en occupe pas — le bouton reste visible, sinon on chercherait un
+                droit qu'on possède déjà.
+            </p>
+        {% endif %}
     {% endif %}
 
     <h2>Installation</h2>
@@ -207,8 +225,45 @@
                     <td>{{ collector.directory }}</td>
                 </tr>
             {% endif %}
+            <tr>
+                <th>Preuves</th>
+                <td>
+                    {% if collector.judge %}
+                        {{ collector.judge }}
+                    {% else %}
+                        aucun droit n'exige que l'identité soit prouvée davantage
+                    {% endif %}
+                </td>
+            </tr>
         </tbody>
     </table>
+
+    {% if collector.proofs is not empty %}
+        <h3>Les droits qui exigent une preuve d'identité</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Droit</th>
+                    <th>Niveau exigé</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for id, proof in collector.proofs %}
+                    <tr>
+                        <th>{{ id }}</th>
+                        <td>{{ proof }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="help">
+            Déclaré sur le verbe, comme le droit lui-même, et retenu au plus exigeant quand deux verbes
+            portent le même droit. Ce que ces niveaux recouvrent est l'affaire du paquet qui les juge —
+            lui seul sait quels moyens comptent, et depuis quand ils ont été présentés.
+        </p>
+    {% endif %}
 
     {#
         À partir d'ici, le même examen que `authorization:doctor`. Les deux le lisent du même

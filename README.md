@@ -29,7 +29,7 @@ l'autre — il n'y a qu'un endroit où elle est écrite.
 
 ## Ce que le paquet garantit
 
-Quatre règles, et chacune **arrête la compilation du conteneur**. Pas un contrôle
+Cinq règles, et chacune **arrête la compilation du conteneur**. Pas un contrôle
 d'intégration continue qu'on peut contourner : l'application ne démarre pas, y compris sur le
 poste de qui a écrit la faute.
 
@@ -39,6 +39,7 @@ poste de qui a écrit la faute.
 | Nul autre qu'un cas d'usage n'en déclare | une surface qui durcit son côté sans toucher au verbe, et l'inverse |
 | Deux droits distincts ne partagent jamais une identité | accorder un droit dans un contexte l'accorder dans l'autre — la collision se juge sur la valeur, donc entre deux cas d'une même énumération autant qu'entre deux énumérations |
 | Toute porte d'entrée reçoit un verbe métier | la porte totalement non gardée — celle qu'on ajoute en oubliant le dispositif, et par où un inconnu sans compte peut agir |
+| Un niveau de preuve exigé sans personne pour en juger | l'exigence ne s'applique plus, et rien ne le dit — c'est aussi ce qui arrête l'application le jour où l'on retire le paquet qui juge, plutôt que de rouvrir en silence ce qu'elle protégeait la veille |
 
 **Les trois premières ne jugent que ce qui implémente `UseCase`.** Une classe qui oublie
 l'interface leur échappe entièrement, tout en pouvant réclamer des droits. Le langage ne sait
@@ -56,13 +57,46 @@ Deux contrôles ne peuvent pas arrêter la compilation et se jouent donc ailleur
 - rapprocher ce que l'attribut **déclare** de ce que le corps **réclame** demande de lire un
   corps de méthode — `PermissionUsage`, en test ;
 - savoir si un droit trouve **quelqu'un pour en juger** demande d'interroger les voters
-  installés — `authorization:doctor`, en ligne de commande.
+  installés — `authorization:doctor`, en ligne de commande. La même commande liste les droits
+  qui exigent une preuve d'identité et nomme ce qui la juge.
 
 Il reste un troisième endroit où regarder, qui ne contrôle rien : là où `WebProfilerBundle` est
 enregistré, le paquet ajoute **un panneau à la barre de debug**. Il montre, page par page, quel
 verbe métier a été traversé, ce qu'il déclare et ce qu'il a réclamé — le chaînon que le panneau
 « Security » de Symfony ne connaît pas. Il y joint le constat du docteur, produit par le même
 examen, pour que la barre et la ligne de commande ne puissent pas se contredire.
+
+## Un droit peut exiger que l'identité soit prouvée
+
+Un droit répond « as-tu le droit ». Il ne répond pas « es-tu bien toi, et depuis quand ». Les
+deux se confondent tant que le mot de passe suffit à entrer, et se séparent le jour où il est
+volé : celui qui entre avec détient tous les droits du compte, et n'a rien prouvé.
+
+```php
+#[RequiresPermission(SecretPermission::Read,   proof: Proof::Strong)]
+#[RequiresPermission(SecretPermission::Reveal, proof: Proof::Recent)]
+final readonly class RevealSecretUseCase implements UseCase
+```
+
+| Niveau | Ce qu'il exige en plus du droit | Ce qu'il arrête |
+|---|---|---|
+| `None` | rien — le défaut, et le code écrit avant se comporte à l'identique | |
+| `Strong` | le compte a posé un moyen de se reconnaître, et l'a présenté pour ouvrir la session | le mot de passe volé |
+| `Recent` | il l'a présenté il y a peu, et on le redemande sinon | la session abandonnée, le cookie dérobé |
+
+L'exigence s'attache au droit et non au verbe : ci-dessus, consulter la fiche du secret passe,
+et c'est la ligne qui révèle sa valeur qui fait ressortir le téléphone. Un droit déclaré par
+plusieurs verbes retient le niveau le plus exigeant — un niveau ne peut que resserrer.
+
+**Ce paquet ne juge rien.** Il nomme les niveaux et pose la question à `ProofOfIdentity`, qui
+vient d'ailleurs — `arnaudmoncondhuy/authentication-policy` le remplit dès qu'un mécanisme est
+allumé. Sans juge, une exigence déclarée arrête la compilation : le défaut est de refuser, pas
+de laisser passer.
+
+`can()` ignore l'exigence : le bouton reste visible, sinon on chercherait un droit qu'on
+possède déjà. C'est `require()` qui oppose le détour, en levant `InsufficientProof` — distincte
+de `MissingPermission`, parce que l'une se répare en accordant un droit et l'autre en
+présentant un moyen.
 
 ## Ce que le paquet ne fait pas
 
@@ -97,7 +131,7 @@ return [
 |---|---|
 | [Monter le paquet](docs/montage.md) | les six gestes, dans l'ordre, ce qui vérifie chacun, et la seule clé de configuration |
 | [Recettes](docs/recettes.md) | une console sans utilisateur, la mise en page d'un refus, les libellés, deux modèles de droits, l'objet interdit… |
-| [Ce qui reste au projet](docs/ce-qui-reste-au-projet.md) | les treize règles que le paquet ne tiendra pas pour vous — **à lire avant d'adopter** |
+| [Ce qui reste au projet](docs/ce-qui-reste-au-projet.md) | les quatorze règles que le paquet ne tiendra pas pour vous — **à lire avant d'adopter** |
 | [Ce qui casse](docs/risques.md) | dix-huit façons de se tromper, et pour chacune si le docteur pourrait la voir |
 
 Ces quatre documents ne se recouvrent pas : une question, un domicile. Ce qui se répète finit
@@ -114,7 +148,7 @@ branches.
 
 | Composant | Pourquoi |
 |---|---|
-| `symfony/dependency-injection` | les cinq passes |
+| `symfony/dependency-injection` | les six passes |
 | `symfony/config` | le chargement de la configuration du bundle |
 | `symfony/security-core` | l'adaptateur qui soumet l'identité au contrôle d'accès |
 | `symfony/event-dispatcher` | seul lecteur du tag `kernel.event_listener` que pose le paquet |
@@ -124,7 +158,8 @@ branches.
 | `symfony/web-profiler-bundle` | *suggéré* — sans lui, ni panneau ni décorateur : le contrat reste nu |
 
 Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,
-`MissingPermission`, `PermissionCatalog`, `UserAuthorizer` — est du PHP nu, sans une seule dépendance. C'est ce
+`MissingPermission`, `PermissionCatalog`, `UserAuthorizer`, `Proof`, `ProofOfIdentity`,
+`InsufficientProof` — est du PHP nu, sans une seule dépendance. C'est ce
 qui permet de le citer depuis un domaine pur. La routine qualité le vérifie à chaque
 exécution, imports et noms qualifiés compris.
 

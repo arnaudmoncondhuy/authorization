@@ -6,6 +6,7 @@ namespace ArnaudMoncondhuy\Authorization\DependencyInjection;
 
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
+use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\RequiresPermission;
 use ArnaudMoncondhuy\Authorization\UseCase;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
@@ -29,10 +30,19 @@ use Symfony\Component\DependencyInjection\Exception\LogicException;
  */
 final readonly class RegisterPermissionCatalogPass implements CompilerPassInterface
 {
+    /**
+     * Les droits qui exigent une preuve d'identité, et laquelle : `['secret.reveal' =>
+     * 'recent']`. Posé même vide, pour que {@see RefuseProofWithoutJudgePass} distingue « rien
+     * n'exige de preuve » de « la collecte n'a pas eu lieu ».
+     */
+    public const string REQUIRED_PROOFS_PARAMETER = 'authorization.required_proofs';
+
     public function process(ContainerBuilder $container): void
     {
         /** @var array<string, Permission> $collected */
         $collected = [];
+        /** @var array<string, Proof> $proofs */
+        $proofs = [];
         $collisions = [];
 
         foreach (array_keys($container->findTaggedServiceIds(Tag::USE_CASE)) as $service) {
@@ -44,8 +54,15 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
             }
 
             foreach ($reflection->getAttributes(RequiresPermission::class) as $attribute) {
-                $permission = $attribute->newInstance()->permission;
+                $declaration = $attribute->newInstance();
+                $permission = $declaration->permission;
                 $id = $permission->id();
+
+                // Le plus exigeant l'emporte, sans que ce soit une faute à signaler : deux
+                // cas d'usage peuvent légitimement porter le même droit et ne pas courir le
+                // même risque. Retenir le plus faible ferait d'un cas d'usage ajouté demain
+                // l'affaiblissement silencieux d'un droit déjà protégé.
+                $proofs[$id] = Proof::strongest($proofs[$id] ?? Proof::None, $declaration->proof);
 
                 // Comparés par valeur et non par classe : deux cas d'une même énumération qui
                 // rendraient la même identité désigneraient deux droits distincts sous un seul
@@ -65,8 +82,20 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
 
         ksort($collected);
 
+        $required = array_filter($proofs, static fn (Proof $proof): bool => Proof::None !== $proof);
+        ksort($required);
+
         $container->register(PermissionCatalog::class, PermissionCatalog::class)
-            ->setArguments([array_values($collected)]);
+            ->setArguments([array_values($collected), $required]);
+
+        // La liste, en valeurs plutôt qu'en cas d'énumération : elle se lit depuis un conteneur
+        // compilé, et c'est elle que RefuseProofWithoutJudgePass interroge pour savoir s'il
+        // faut un juge. Toujours définie, vide comprise — son absence signifierait que la
+        // passe n'a pas tourné, ce qui ne se distingue pas de « rien n'exige de preuve ».
+        $container->setParameter(
+            self::REQUIRED_PROOFS_PARAMETER,
+            array_map(static fn (Proof $proof): string => $proof->value, $required),
+        );
     }
 
     private static function name(Permission $permission): string

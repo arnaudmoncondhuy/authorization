@@ -19,7 +19,17 @@ namespace ArnaudMoncondhuy\Authorization;
 #[\Attribute(\Attribute::TARGET_CLASS | \Attribute::IS_REPEATABLE)]
 final readonly class RequiresPermission
 {
-    public function __construct(public Permission $permission)
-    {
+    /**
+     * @param Proof $proof à quel point l'appelant doit avoir prouvé son identité, en plus de
+     *                     détenir le droit. Attaché au droit et non au cas d'usage : une
+     *                     action qui affiche une fiche et en révèle le secret porte les deux,
+     *                     et seul le second doit faire ressortir le téléphone. Un droit
+     *                     déclaré par plusieurs cas d'usage retient le niveau le plus exigeant
+     *                     — {@see Proof::strongest()}.
+     */
+    public function __construct(
+        public Permission $permission,
+        public Proof $proof = Proof::None,
+    ) {
     }
 }

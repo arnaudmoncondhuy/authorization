@@ -51,6 +51,16 @@ temps de réponse entre compte connu et inconnu — un compte sans mot de passe 
 plus vite —, durée de vie des jetons d'API, jeton de formulaire sur la déconnexion : rien de
 tout cela n'est couvert, et rien ne le signalera.
 
+**9 bis. Un niveau de preuve exigé engage un autre paquet, et deux choses lui échappent.** Le
+conteneur refuse de compiler si personne ne juge (`ProofOfIdentity`), mais il ne sait pas si ce
+juge peut répondre oui un jour : une politique d'authentification qui n'exige aucun moyen rend
+l'action inatteignable pour tout le monde, et c'est l'examen de *ce* paquet-là qui le dira.
+L'autre point est la traduction du refus : `InsufficientProof` n'est pas un 403 mais un détour,
+et sans écouteur pour l'envoyer vers l'écran qui redemande, la surface rend une erreur serveur —
+elle ferme, elle n'ouvre pas, mais elle ne sert plus.
+*Vérifiable :* `authorization:doctor` liste ce qui exige et ce qui juge ; le docteur du paquet
+qui juge dit si un compte peut l'atteindre.
+
 **10. Une application de développement joignable ailleurs qu'en local publie ses secrets.** Le
 profileur rend la clé d'application, les identifiants de base, les jetons et les sessions à qui
 les demande. `authorization:doctor` ne dira rien de votre environnement.

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Kernel;
 
 use ArnaudMoncondhuy\Authorization\AuthorizationBundle;
+use ArnaudMoncondhuy\Authorization\ProofOfIdentity;
 use Composer\InstalledVersions;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
@@ -47,6 +48,10 @@ final class AuthorizationTestKernel extends Kernel
      *                                           enregistré, et le profileur qui collecte. C'est à ce
      *                                           bundle, et non au mode debug, que le paquet conditionne
      *                                           son panneau
+     * @param ?class-string        $judge        ce qui juge une preuve d'identité, enregistré sous
+     *                                           l'alias du contrat comme le ferait le paquet qui
+     *                                           l'apporte. Nul pour l'application qui n'en a aucun,
+     *                                           laquelle ne doit pouvoir exiger aucune preuve
      */
     public function __construct(
         private readonly array $services = [],
@@ -54,6 +59,7 @@ final class AuthorizationTestKernel extends Kernel
         private readonly bool $security = true,
         private readonly ?string $userProvider = null,
         private readonly bool $profiler = false,
+        private readonly ?string $judge = null,
     ) {
         // Hors debug : ce mode installe des gestionnaires d'erreurs globaux qu'un processus de
         // test ne doit pas hériter d'un cas au suivant. La compilation du conteneur, seule
@@ -174,6 +180,13 @@ final class AuthorizationTestKernel extends Kernel
                     ->setAutowired(true)
                     ->setPublic(true);
             }
+
+            // Sous l'alias du contrat, et non sous son propre nom : c'est l'alias que le
+            // paquet interroge, et c'est ainsi que le paquet d'authentification le pose.
+            if (null !== $this->judge) {
+                $container->register($this->judge, $this->judge);
+                $container->setAlias(ProofOfIdentity::class, $this->judge)->setPublic(true);
+            }
         });
     }
 
@@ -203,6 +216,7 @@ final class AuthorizationTestKernel extends Kernel
             $this->security ? 'security' : 'bare',
             $this->profiler ? 'profiler' : 'sans profileur',
             $this->userProvider ?? 'toute la chaîne',
+            $this->judge ?? 'sans juge',
             ...$this->services,
         ]));
 

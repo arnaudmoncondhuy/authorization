@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
+use ArnaudMoncondhuy\Authorization\InsufficientProof;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
+use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\FixedAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\InvoicePermission;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\UnprovenAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
@@ -44,7 +47,27 @@ final class TracingAuthorizerTest extends TestCase
         }
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'caller' => null]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'caller' => null]],
+            $tracing->calls(),
+        );
+    }
+
+    /**
+     * Un détour n'est pas un refus, et le panneau doit pouvoir le dire : sans le niveau
+     * manquant, une page qui fait exactement son travail s'afficherait en rouge.
+     */
+    public function testADetourNotesWhichProofWasMissing(): void
+    {
+        $tracing = new TracingAuthorizer(new UnprovenAuthorizer(Proof::Recent));
+
+        try {
+            $tracing->require(InvoicePermission::View);
+            self::fail('Le détour aurait dû être relancé.');
+        } catch (InsufficientProof) {
+        }
+
+        self::assertSame(
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => 'recent', 'caller' => null]],
             $tracing->calls(),
         );
     }
@@ -56,7 +79,7 @@ final class TracingAuthorizerTest extends TestCase
         $tracing->require(InvoicePermission::View);
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => true, 'caller' => null]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => true, 'unproven' => null, 'caller' => null]],
             $tracing->calls(),
         );
     }
