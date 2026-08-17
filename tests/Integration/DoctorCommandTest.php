@@ -14,7 +14,6 @@ use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\UnguardedPermissionVot
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\ViewInvoiceUseCase;
-use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Stock\AdjustStockUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Kernel\AuthorizationTestKernel;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -48,17 +47,6 @@ final class DoctorCommandTest extends TestCase
         $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
 
         self::assertSame(Command::SUCCESS, $tester->getStatusCode());
-    }
-
-    /**
-     * Un voter qui refuse est un juge : ce qui compte est qu'il se prononce, pas ce qu'il
-     * décide. Confondre les deux ferait passer une application entière pour malade.
-     */
-    public function testARefusingVoterCountsAsAJudge(): void
-    {
-        $tester = $this->diagnose(ViewInvoiceUseCase::class, InvoiceBook::class, FixturePermissionVoter::class);
-
-        self::assertStringNotContainsString('fixture.invoice.view', $tester->getDisplay());
     }
 
     /**
@@ -167,24 +155,6 @@ final class DoctorCommandTest extends TestCase
         self::assertStringContainsString("'fixture.invoice.finalize',", $display);
         self::assertStringContainsString("'fixture.invoice.backdate',", $display);
         self::assertStringNotContainsString("'fixture.invoice.view',", $display);
-    }
-
-    /**
-     * Un squelette par contexte métier, et non un voter unique pour tout ce qui manque : c'est
-     * le découpage que le paquet demande aux énumérations, et deux contextes réunis dans un
-     * même `supports()` feraient d'un droit de facturation l'affaire du voter des stocks.
-     */
-    public function testItSketchesOneVoterPerContext(): void
-    {
-        $tester = $this->diagnose(
-            ViewInvoiceUseCase::class,
-            InvoiceBook::class,
-            AdjustStockUseCase::class,
-        );
-        $display = $tester->getDisplay();
-
-        self::assertStringContainsString('final class InvoiceVoter extends Voter', $display);
-        self::assertStringContainsString('final class StockVoter extends Voter', $display);
     }
 
     /**

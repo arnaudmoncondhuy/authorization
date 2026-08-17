@@ -13,7 +13,7 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
  * que le catalogue, et une application sans pare-feu a autant besoin de savoir ce que son code
  * exige qu'une autre.
  *
- * Avec `config/doctor.php`, les seuls services du paquet à réclamer PermissionCatalog : ils le
+ * Avec `VoterSurvey`, le seul service du paquet à réclamer PermissionCatalog : ils le
  * retiennent donc dans le conteneur d'une application qui ne l'injecte nulle part ailleurs.
  */
 return static function (ContainerConfigurator $container): void {

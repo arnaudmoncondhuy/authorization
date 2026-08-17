@@ -100,6 +100,10 @@ final class AuthorizationBundle extends AbstractBundle
         if (isset($bundles['SecurityBundle'])) {
             $configurator->import('../config/security.php');
 
+            // L'examen des voters, que le docteur et le panneau se partagent. Il n'a de sens
+            // qu'ici : sans pare-feu, il n'y a pas de voter à interroger.
+            $configurator->import('../config/voters.php');
+
             // La clé absente laisse l'adaptateur sur la chaîne de tous les fournisseurs, qui est
             // ce que `config/security.php` lui donne.
             $provider = $config['user_provider'] ?? null;
