@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Kernel;
 
 use ArnaudMoncondhuy\Authorization\AuthorizationBundle;
+use Composer\InstalledVersions;
 use Symfony\Bundle\FrameworkBundle\FrameworkBundle;
 use Symfony\Bundle\SecurityBundle\SecurityBundle;
 use Symfony\Bundle\TwigBundle\TwigBundle;
@@ -133,8 +134,24 @@ final class AuthorizationTestKernel extends Kernel
             // La barre elle-même est éteinte : elle exige un routeur pour bâtir le lien vers le
             // profileur, et ce qui est éprouvé ici est le câblage, pas l'affichage.
             if ($this->profiler) {
+                $profiler = ['enabled' => true, 'collect' => true];
+
+                // Les deux branches se contredisent sur cette clé : la 7.3 déprécie de ne pas
+                // la poser, la 8.1 déprécie de la poser. Aucune configuration ne convient aux
+                // deux, et `failOnDeprecation` fait de l'un comme de l'autre un échec — elle
+                // se pose donc sur la seule branche qui la réclame.
+                //
+                // C'est FrameworkBundle qu'on interroge, et non la constante de version du
+                // noyau : la clé est la sienne, la dépréciation aussi, et c'est donc lui qui
+                // dit laquelle des deux règles s'applique.
+                $framework = InstalledVersions::getVersion('symfony/framework-bundle');
+
+                if (null !== $framework && version_compare($framework, '8.1', '<')) {
+                    $profiler['collect_serializer_data'] = true;
+                }
+
                 $container->loadFromExtension('framework', [
-                    'profiler' => ['enabled' => true, 'collect' => true],
+                    'profiler' => $profiler,
                     // WebProfilerBundle en tire le lien vers le profileur, et le réclame donc
                     // même sur une application qui ne sert aucune page. La ressource est vide,
                     // et c'est ce qu'il faut dire : ce qui est éprouvé ici est le câblage.
