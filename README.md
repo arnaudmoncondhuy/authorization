@@ -98,6 +98,43 @@ possède déjà. C'est `require()` qui oppose le détour, en levant `Insufficien
 de `MissingPermission`, parce que l'une se répare en accordant un droit et l'autre en
 présentant un moyen.
 
+## Un droit peut réclamer que l'acte soit confirmé
+
+Un second axe, à côté du premier et indépendant de lui. Prouver son identité répond « es-tu
+bien toi » ; confirmer répond « est-ce bien ce que tu voulais faire ». Aucun facteur n'arrête
+le clic de trop : c'est bien la bonne personne qui clique.
+
+```php
+#[RequiresPermission(WorkspacePermission::HandOver, confirmation: Confirmation::Secret)]
+final readonly class HandOverOwnershipUseCase implements UseCase
+```
+
+| Niveau | Ce qu'il réclame en plus du droit | Ce qu'il arrête |
+|---|---|---|
+| `None` | rien — le défaut, et le code écrit avant se comporte à l'identique | |
+| `Typed` | recopier ce que l'écran demande d'écrire | le clic de trop, le bouton voisin |
+| `Secret` | la phrase, et ce que l'appelant est seul à connaître | la main qui n'est pas la bonne devant un écran resté ouvert |
+
+**Les deux axes ne se mêlent pas**, et c'est délibéré : recopier une phrase ne vaut pas un
+second facteur, et présenter un second facteur ne dit pas qu'on voulait poser l'acte. Un verbe
+peut réclamer l'un, l'autre, les deux ou aucun. Quand les deux sont déclarés, l'identité est
+vérifiée d'abord — faire recopier une phrase pour refuser ensuite apprendrait au passage que
+l'acte existe.
+
+**Une confirmation ne voyage pas.** Elle accompagne la requête qui pose l'acte et ne vaut pas
+pour le suivant : c'est ce qui la distingue d'une preuve, qui vaut le temps d'une session ou
+d'une fraîcheur. Il n'y a donc pas de détour ici — pas d'écran intermédiaire, pas de retour à
+la page d'origine, et rien à rejouer.
+
+`require()` lève `MissingConfirmation`, que la surface rattrape pour réafficher son propre
+formulaire avec le champ et ce qui n'allait pas. Elle seule sait le faire : aucun paquet ne
+connaît son écran. Sans rattrapage, un écouteur ferme en 422 — l'acte ne part pas, et le refus
+ne se trompe pas de cause.
+
+Comme pour les preuves, ce paquet ne recueille rien : il nomme les niveaux et pose la question
+à `ConfirmationOfIntent`, qui vient d'ailleurs. Sans juge, une exigence déclarée arrête la
+compilation.
+
 ## Ce que le paquet ne fait pas
 
 **Il ne décide rien.** Savoir si l'utilisateur courant détient `invoice.finalize` reste
@@ -159,7 +196,8 @@ branches.
 
 Le **contrat** — `Permission`, `UseCase`, `RequiresPermission`, `Authorizer`,
 `MissingPermission`, `PermissionCatalog`, `UserAuthorizer`, `Proof`, `ProofOfIdentity`,
-`InsufficientProof` — est du PHP nu, sans une seule dépendance. C'est ce
+`InsufficientProof`, `Confirmation`, `ConfirmationOfIntent`, `MissingConfirmation` — est du
+PHP nu, sans une seule dépendance. C'est ce
 qui permet de le citer depuis un domaine pur. La routine qualité le vérifie à chaque
 exécution, imports et noms qualifiés compris.
 

@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
+use ArnaudMoncondhuy\Authorization\Confirmation;
 use ArnaudMoncondhuy\Authorization\InsufficientProof;
+use ArnaudMoncondhuy\Authorization\MissingConfirmation;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\InvoicePermission;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\CallerAccessChecker;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\GivenConfirmation;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Security\ProvenIdentity;
 use PHPUnit\Framework\TestCase;
 
@@ -150,16 +153,115 @@ final class SecurityAuthorizerTest extends TestCase
         self::assertTrue($access->can(InvoicePermission::Finalize));
     }
 
-    /** @param array<string, Proof> $proofs */
+    /**
+     * Le droit réclame une confirmation, et la requête n'en portait pas. Le refus nomme les
+     * deux, comme celui de la preuve : la surface doit savoir quoi redemander.
+     */
+    public function testRequireStopsAGrantedPermissionWhenIntentIsNotConfirmed(): void
+    {
+        $access = $this->authorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            confirmations: ['fixture.invoice.finalize' => Confirmation::Secret],
+            confirmed: Confirmation::Typed,
+        );
+
+        try {
+            $access->require(InvoicePermission::Finalize);
+            self::fail('Une confirmation insuffisante doit arrêter le cas d\'usage.');
+        } catch (MissingConfirmation $missing) {
+            self::assertSame(InvoicePermission::Finalize, $missing->permission);
+            self::assertSame(Confirmation::Secret, $missing->required);
+        }
+    }
+
+    public function testRequireLetsThroughWhenIntentIsConfirmedEnough(): void
+    {
+        $access = $this->authorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            confirmations: ['fixture.invoice.finalize' => Confirmation::Typed],
+            confirmed: Confirmation::Secret,
+        );
+
+        $access->require(InvoicePermission::Finalize);
+
+        self::expectNotToPerformAssertions();
+    }
+
+    /**
+     * L'identité avant l'intention : confirmer un acte qu'on va de toute façon se voir refuser
+     * fait recopier une phrase pour rien, et apprend qu'il existe.
+     */
+    public function testAMissingProofIsReportedBeforeAMissingConfirmation(): void
+    {
+        $access = $this->authorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            proofs: ['fixture.invoice.finalize' => Proof::Recent],
+            confirmations: ['fixture.invoice.finalize' => Confirmation::Typed],
+        );
+
+        $this->expectException(InsufficientProof::class);
+
+        $access->require(InvoicePermission::Finalize);
+    }
+
+    /**
+     * Les deux axes sont indépendants : une identité prouvée ne confirme aucune intention, et
+     * c'est toute la raison de les avoir séparés.
+     */
+    public function testAProvenIdentityDoesNotConfirmAnything(): void
+    {
+        $access = $this->authorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            proofs: ['fixture.invoice.finalize' => Proof::Recent],
+            confirmations: ['fixture.invoice.finalize' => Confirmation::Typed],
+            proven: Proof::Recent,
+        );
+
+        $this->expectException(MissingConfirmation::class);
+
+        $access->require(InvoicePermission::Finalize);
+    }
+
+    /** Le nul refuse au lieu de laisser passer, sur cet axe comme sur l'autre. */
+    public function testWithoutAWitnessAnyConfirmationRequirementRefuses(): void
+    {
+        $access = new SecurityAuthorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            new PermissionCatalog([], [], ['fixture.invoice.finalize' => Confirmation::Typed]),
+        );
+
+        $this->expectException(MissingConfirmation::class);
+
+        $access->require(InvoicePermission::Finalize);
+    }
+
+    /** Consulter ne demande pas non plus de confirmer : le bouton reste visible. */
+    public function testCanIgnoresTheConfirmationRequirement(): void
+    {
+        $access = $this->authorizer(
+            new CallerAccessChecker('fixture.invoice.finalize'),
+            confirmations: ['fixture.invoice.finalize' => Confirmation::Secret],
+        );
+
+        self::assertTrue($access->can(InvoicePermission::Finalize));
+    }
+
+    /**
+     * @param array<string, Proof>        $proofs
+     * @param array<string, Confirmation> $confirmations
+     */
     private function authorizer(
         CallerAccessChecker $checker,
         array $proofs = [],
         Proof $proven = Proof::None,
+        array $confirmations = [],
+        Confirmation $confirmed = Confirmation::None,
     ): SecurityAuthorizer {
         return new SecurityAuthorizer(
             $checker,
-            new PermissionCatalog([], $proofs),
+            new PermissionCatalog([], $proofs, $confirmations),
             new ProvenIdentity($proven),
+            new GivenConfirmation($confirmed),
         );
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\SecurityUserAuthorizer;
+use ArnaudMoncondhuy\Authorization\ConfirmationOfIntent;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\ProofOfIdentity;
@@ -49,6 +50,12 @@ return static function (ContainerConfigurator $container): void {
                 // détenu ne pose jamais la question. Celui qui l'exige sans juge n'atteint pas
                 // l'exécution — RefuseProofWithoutJudgePass arrête la compilation.
                 service(ProofOfIdentity::class)->nullOnInvalid(),
+
+                // Ce qui juge une confirmation d'intention, sur le même principe et sur
+                // l'autre axe : nul tant que rien ne sait recueillir une confirmation, et
+                // RefuseConfirmationWithoutJudgePass arrête la compilation de qui en exige
+                // une sans juge.
+                service(ConfirmationOfIntent::class)->nullOnInvalid(),
             ])
 
         // C'est l'alias, et non la classe, qu'un cas d'usage reçoit : il ne cite jamais

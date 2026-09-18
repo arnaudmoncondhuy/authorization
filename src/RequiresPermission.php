@@ -20,16 +20,24 @@ namespace ArnaudMoncondhuy\Authorization;
 final readonly class RequiresPermission
 {
     /**
-     * @param Proof $proof à quel point l'appelant doit avoir prouvé son identité, en plus de
-     *                     détenir le droit. Attaché au droit et non au cas d'usage : une
-     *                     action qui affiche une fiche et en révèle le secret porte les deux,
-     *                     et seul le second doit faire ressortir le téléphone. Un droit
-     *                     déclaré par plusieurs cas d'usage retient le niveau le plus exigeant
-     *                     — {@see Proof::strongest()}.
+     * @param Proof        $proof        à quel point l'appelant doit avoir prouvé son identité,
+     *                                   en plus de détenir le droit. Attaché au droit et non au
+     *                                   cas d'usage : une action qui affiche une fiche et en
+     *                                   révèle le secret porte les deux, et seul le second doit
+     *                                   faire ressortir le téléphone. Un droit déclaré par
+     *                                   plusieurs cas d'usage retient le niveau le plus exigeant
+     *                                   — {@see Proof::strongest()}.
+     * @param Confirmation $confirmation à quel point l'appelant doit confirmer qu'il veut poser
+     *                                   cet acte. Deux axes plutôt qu'un : prouver qui l'on est
+     *                                   et dire qu'on est sûr ne répondent pas à la même
+     *                                   question, et un acte peut réclamer l'une, l'autre, les
+     *                                   deux ou aucune. Même règle pour les déclarations
+     *                                   multiples — {@see Confirmation::strongest()}.
      */
     public function __construct(
         public Permission $permission,
         public Proof $proof = Proof::None,
+        public Confirmation $confirmation = Confirmation::None,
     ) {
     }
 }

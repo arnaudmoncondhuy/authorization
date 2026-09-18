@@ -69,7 +69,7 @@ final class ProfilerWiringTest extends TestCase
         self::assertInstanceOf(TracingAuthorizer::class, $traced);
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'caller' => ViewInvoiceUseCase::class]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'unconfirmed' => null, 'caller' => ViewInvoiceUseCase::class]],
             $traced->calls(),
         );
     }

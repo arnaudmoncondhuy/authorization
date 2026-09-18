@@ -7,6 +7,7 @@ namespace ArnaudMoncondhuy\Authorization;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckOnlyUseCasesDeclarePermissionsPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckSurfacesDelegateToUseCasesPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\CheckUseCasesDeclarePermissionsPass;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseConfirmationWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseProofWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RegisterPermissionCatalogPass;
@@ -52,9 +53,12 @@ final class AuthorizationBundle extends AbstractBundle
         $container->addCompilerPass(new CheckSurfacesDelegateToUseCasesPass());
         $container->addCompilerPass(new RegisterPermissionCatalogPass());
 
-        // Après le recensement, dont elle lit le résultat : elle ne juge pas le code de
-        // l'application mais l'absence d'un contrat que ses déclarations réclament.
+        // Après le recensement, dont elles lisent le résultat : elles ne jugent pas le code de
+        // l'application mais l'absence d'un contrat que ses déclarations réclament. Une par axe,
+        // parce qu'une exigence peut trouver son juge et l'autre pas, et que le message doit
+        // nommer celui qui manque.
         $container->addCompilerPass(new RefuseProofWithoutJudgePass());
+        $container->addCompilerPass(new RefuseConfirmationWithoutJudgePass());
 
         // Celle-ci ne juge aucun code de l'application : elle constate qu'un adaptateur du
         // paquet n'aurait pas de quoi répondre. Elle vit ici et non dans `loadExtension()`

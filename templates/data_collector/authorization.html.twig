@@ -188,6 +188,15 @@
                 droit qu'on possède déjà.
             </p>
         {% endif %}
+
+        {% if collector.unconfirmed > 0 %}
+            <p class="help">
+                Une confirmation manquante n'est pas un refus non plus : le droit était détenu et
+                l'identité suffisante, l'acte attendait qu'on dise qu'on en était sûr. Il n'y a pas de
+                détour — la confirmation voyage avec la requête qui pose l'acte, et c'est l'écran qui
+                l'a posé qui la redemande.
+            </p>
+        {% endif %}
     {% endif %}
 
     <h2>Installation</h2>
@@ -235,6 +244,16 @@
                     {% endif %}
                 </td>
             </tr>
+            <tr>
+                <th>Intention</th>
+                <td>
+                    {% if collector.witness %}
+                        {{ collector.witness }}
+                    {% else %}
+                        aucun droit ne réclame de confirmation
+                    {% endif %}
+                </td>
+            </tr>
         </tbody>
     </table>
 
@@ -262,6 +281,33 @@
             Déclaré sur le verbe, comme le droit lui-même, et retenu au plus exigeant quand deux verbes
             portent le même droit. Ce que ces niveaux recouvrent est l'affaire du paquet qui les juge —
             lui seul sait quels moyens comptent, et depuis quand ils ont été présentés.
+        </p>
+    {% endif %}
+
+    {% if collector.confirmations is not empty %}
+        <h3>Les droits qui réclament une confirmation</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Droit</th>
+                    <th>Niveau exigé</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for id, confirmation in collector.confirmations %}
+                    <tr>
+                        <th>{{ id }}</th>
+                        <td>{{ confirmation }}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p class="help">
+            Un second axe, indépendant des preuves : celui-ci ne demande pas qui vous êtes, mais si vous
+            vouliez bien faire cela. Une confirmation ne vaut que pour l'acte qu'elle accompagne, et ne
+            se garde pas d'une requête à l'autre.
         </p>
     {% endif %}
 

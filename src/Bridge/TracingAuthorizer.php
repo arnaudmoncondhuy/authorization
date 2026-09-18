@@ -6,6 +6,7 @@ namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\InsufficientProof;
+use ArnaudMoncondhuy\Authorization\MissingConfirmation;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\UseCase;
@@ -29,7 +30,7 @@ final class TracingAuthorizer implements Authorizer
      */
     private const int DEPTH = 8;
 
-    /** @var list<array{id: string, kind: string, granted: bool, unproven: ?string, caller: ?class-string}> */
+    /** @var list<array{id: string, kind: string, granted: bool, unproven: ?string, unconfirmed: ?string, caller: ?class-string}> */
     private array $calls = [];
 
     public function __construct(private readonly Authorizer $inner)
@@ -63,6 +64,13 @@ final class TracingAuthorizer implements Authorizer
             $this->note($permission, 'require', false, $detour->required->value);
 
             throw $detour;
+        } catch (MissingConfirmation $unconfirmed) {
+            // Le droit était accordé et l'identité suffisante : ce qui manque est la
+            // confirmation. Ni un refus ni un détour — l'écran qui a posé l'acte va redemander
+            // sur place, et le panneau doit pouvoir le dire dans ces mots-là.
+            $this->note($permission, 'require', false, null, $unconfirmed->required->value);
+
+            throw $unconfirmed;
         }
 
         $this->note($permission, 'require', true);
@@ -82,7 +90,7 @@ final class TracingAuthorizer implements Authorizer
         return $this->inner instanceof self ? $this->inner->wraps() : $this->inner::class;
     }
 
-    /** @return list<array{id: string, kind: string, granted: bool, unproven: ?string, caller: ?class-string}> */
+    /** @return list<array{id: string, kind: string, granted: bool, unproven: ?string, unconfirmed: ?string, caller: ?class-string}> */
     public function calls(): array
     {
         return $this->calls;
@@ -98,16 +106,23 @@ final class TracingAuthorizer implements Authorizer
     }
 
     /**
-     * @param ?string $unproven le niveau de preuve exigé, quand c'est lui qui a manqué et non
-     *                          le droit
+     * @param ?string $unproven    le niveau de preuve exigé, quand c'est lui qui a manqué et non
+     *                             le droit
+     * @param ?string $unconfirmed le niveau de confirmation exigé, quand c'est lui qui a manqué
      */
-    private function note(Permission $permission, string $kind, bool $granted, ?string $unproven = null): void
-    {
+    private function note(
+        Permission $permission,
+        string $kind,
+        bool $granted,
+        ?string $unproven = null,
+        ?string $unconfirmed = null,
+    ): void {
         $this->calls[] = [
             'id' => $permission->id(),
             'kind' => $kind,
             'granted' => $granted,
             'unproven' => $unproven,
+            'unconfirmed' => $unconfirmed,
             'caller' => $this->callingUseCase(),
         ];
     }

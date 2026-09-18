@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
 use ArnaudMoncondhuy\Authorization\Authorizer;
+use ArnaudMoncondhuy\Authorization\Confirmation;
+use ArnaudMoncondhuy\Authorization\ConfirmationOfIntent;
 use ArnaudMoncondhuy\Authorization\InsufficientProof;
+use ArnaudMoncondhuy\Authorization\MissingConfirmation;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
@@ -36,6 +39,13 @@ final readonly class SecurityAuthorizer implements Authorizer
          * arrête sa compilation.
          */
         private ?ProofOfIdentity $identity = null,
+        /**
+         * Nul quand aucun paquet ne sait juger une confirmation d'intention, ce qui est le cas
+         * de toute application qui n'en exige aucune. Celle qui en exige une sans juge n'atteint
+         * pas ce point : {@see \ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseConfirmationWithoutJudgePass}
+         * arrête sa compilation.
+         */
+        private ?ConfirmationOfIntent $intent = null,
     ) {
     }
 
@@ -63,15 +73,19 @@ final readonly class SecurityAuthorizer implements Authorizer
 
         $required = $this->catalog->proofFor($permission->id());
 
-        if (Proof::None === $required) {
-            return;
-        }
-
         // Le nul refuse au lieu de laisser passer. Il ne devrait jamais se présenter — la
         // compilation s'arrête avant — mais c'est le sens dans lequel une garantie doit tomber
         // si jamais elle tombe.
-        if (null === $this->identity || !$this->identity->meets($required)) {
+        if (Proof::None !== $required && (null === $this->identity || !$this->identity->meets($required))) {
             throw InsufficientProof::of($permission, $required);
+        }
+
+        // L'identité avant l'intention : confirmer un acte qu'on va de toute façon se voir
+        // refuser fait recopier une phrase pour rien, et apprend qu'il existe.
+        $confirmation = $this->catalog->confirmationFor($permission->id());
+
+        if (Confirmation::None !== $confirmation && (null === $this->intent || !$this->intent->meets($confirmation))) {
+            throw MissingConfirmation::of($permission, $confirmation);
         }
     }
 }

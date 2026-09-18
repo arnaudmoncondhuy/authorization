@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace ArnaudMoncondhuy\Authorization\Tests\Unit;
 
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
+use ArnaudMoncondhuy\Authorization\Confirmation;
 use ArnaudMoncondhuy\Authorization\InsufficientProof;
+use ArnaudMoncondhuy\Authorization\MissingConfirmation;
 use ArnaudMoncondhuy\Authorization\MissingPermission;
 use ArnaudMoncondhuy\Authorization\Proof;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\FixedAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\InvoicePermission;
+use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\UnconfirmedAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Authorization\UnprovenAuthorizer;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\FinalizeInvoiceUseCase;
 use ArnaudMoncondhuy\Authorization\Tests\Fixture\Service\Invoice\InvoiceBook;
@@ -47,7 +50,7 @@ final class TracingAuthorizerTest extends TestCase
         }
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'caller' => null]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'unconfirmed' => null, 'caller' => null]],
             $tracing->calls(),
         );
     }
@@ -67,7 +70,27 @@ final class TracingAuthorizerTest extends TestCase
         }
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => 'recent', 'caller' => null]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => 'recent', 'unconfirmed' => null, 'caller' => null]],
+            $tracing->calls(),
+        );
+    }
+
+    /**
+     * Une confirmation manquante se note sur son propre axe : rangée sous la preuve, elle
+     * ferait chercher un second facteur là où il n'en manque aucun.
+     */
+    public function testAMissingConfirmationIsNotedOnItsOwnAxis(): void
+    {
+        $tracing = new TracingAuthorizer(new UnconfirmedAuthorizer(Confirmation::Secret));
+
+        try {
+            $tracing->require(InvoicePermission::View);
+            self::fail('La demande de confirmation aurait dû être relancée.');
+        } catch (MissingConfirmation) {
+        }
+
+        self::assertSame(
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => false, 'unproven' => null, 'unconfirmed' => 'secret', 'caller' => null]],
             $tracing->calls(),
         );
     }
@@ -79,7 +102,7 @@ final class TracingAuthorizerTest extends TestCase
         $tracing->require(InvoicePermission::View);
 
         self::assertSame(
-            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => true, 'unproven' => null, 'caller' => null]],
+            [['id' => 'fixture.invoice.view', 'kind' => 'require', 'granted' => true, 'unproven' => null, 'unconfirmed' => null, 'caller' => null]],
             $tracing->calls(),
         );
     }

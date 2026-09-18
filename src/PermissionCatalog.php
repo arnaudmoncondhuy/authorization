@@ -25,15 +25,21 @@ final readonly class PermissionCatalog
     /** @var array<string, Proof> */
     private array $proofById;
 
+    /** @var array<string, Confirmation> */
+    private array $confirmationById;
+
     /**
-     * @param iterable<Permission> $permissions
-     * @param array<string, Proof> $proofs      le niveau de preuve exigé, par identité de
-     *                                          droit. Vient de la même déclaration que le
-     *                                          droit lui-même, donc il ne peut pas la
-     *                                          contredire ; les identités absentes n'exigent
-     *                                          rien de plus que le droit
+     * @param iterable<Permission>        $permissions
+     * @param array<string, Proof>        $proofs        le niveau de preuve exigé, par identité
+     *                                                   de droit. Vient de la même déclaration
+     *                                                   que le droit lui-même, donc il ne peut
+     *                                                   pas la contredire ; les identités
+     *                                                   absentes n'exigent rien de plus que le
+     *                                                   droit
+     * @param array<string, Confirmation> $confirmations le niveau de confirmation exigé, par
+     *                                                   identité de droit, sur le même principe
      */
-    public function __construct(iterable $permissions = [], array $proofs = [])
+    public function __construct(iterable $permissions = [], array $proofs = [], array $confirmations = [])
     {
         $byId = [];
 
@@ -45,6 +51,7 @@ final readonly class PermissionCatalog
 
         $this->byId = $byId;
         $this->proofById = $proofs;
+        $this->confirmationById = $confirmations;
     }
 
     /** @return list<Permission> */
@@ -96,5 +103,33 @@ final readonly class PermissionCatalog
         ksort($proofs);
 
         return $proofs;
+    }
+
+    /**
+     * Le niveau de confirmation qu'un droit exige, en plus d'être détenu.
+     *
+     * Même lecture que {@see self::proofFor()}, sur l'autre axe : une identité qu'aucune
+     * déclaration ne relève n'exige rien.
+     */
+    public function confirmationFor(string $id): Confirmation
+    {
+        return $this->confirmationById[$id] ?? Confirmation::None;
+    }
+
+    /**
+     * Les droits qui réclament une confirmation, avec leur niveau.
+     *
+     * @return array<string, Confirmation>
+     */
+    public function confirmations(): array
+    {
+        $confirmations = array_filter(
+            $this->confirmationById,
+            static fn (Confirmation $confirmation): bool => Confirmation::None !== $confirmation,
+        );
+
+        ksort($confirmations);
+
+        return $confirmations;
     }
 }

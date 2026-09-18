@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use ArnaudMoncondhuy\Authorization\Bridge\MissingConfirmationListener;
 use ArnaudMoncondhuy\Authorization\Bridge\MissingPermissionListener;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -16,6 +17,9 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 return static function (ContainerConfigurator $container): void {
     $container->services()
         ->set(MissingPermissionListener::class)
+            ->tag('kernel.event_listener', ['event' => 'kernel.exception'])
+
+        ->set(MissingConfirmationListener::class)
             ->tag('kernel.event_listener', ['event' => 'kernel.exception'])
     ;
 };

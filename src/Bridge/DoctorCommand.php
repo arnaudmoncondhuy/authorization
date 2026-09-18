@@ -51,6 +51,8 @@ final class DoctorCommand extends Command
      * @param ?string       $judge     ce qui juge une preuve d'identité, ou nul quand rien ne
      *                                 le fait — et alors aucun droit n'en exige, puisque la
      *                                 compilation s'y serait opposée
+     * @param ?string       $witness   ce qui juge une confirmation d'intention, sur le même
+     *                                 principe et sur l'autre axe
      */
     public function __construct(
         private readonly VoterSurvey $survey,
@@ -60,6 +62,7 @@ final class DoctorCommand extends Command
         private readonly ?string $onBehalf = null,
         private readonly ?string $directory = null,
         private readonly ?string $judge = null,
+        private readonly ?string $witness = null,
     ) {
         parent::__construct();
     }
@@ -105,6 +108,7 @@ final class DoctorCommand extends Command
         $console->writeln(\sprintf('Droits   : %d', \count($permissions)));
 
         $this->reportProofs($console);
+        $this->reportConfirmations($console);
 
         $console->newLine();
 
@@ -192,6 +196,39 @@ final class DoctorCommand extends Command
         $console->writeln('Ce que ces niveaux recouvrent est l\'affaire du paquet qui les juge : lui seul');
         $console->writeln('sait quels moyens comptent et depuis quand ils ont été présentés. Son propre');
         $console->writeln('examen dira si un compte peut les atteindre.');
+    }
+
+    /**
+     * Les droits qui réclament une confirmation d'intention, et ce qui la recueille.
+     *
+     * Dit à part des preuves, et non mêlé à elles : les deux exigences ne se réparent pas de la
+     * même façon, et une liste unique ferait croire à une échelle commune.
+     */
+    private function reportConfirmations(SymfonyStyle $console): void
+    {
+        $confirmations = $this->catalog->confirmations();
+
+        if ([] === $confirmations) {
+            $console->writeln('Intention: aucun droit ne réclame de confirmation');
+
+            return;
+        }
+
+        $console->writeln(\sprintf(
+            'Intention: %d droit(s), recueillie(s) par %s',
+            \count($confirmations),
+            $this->witness ?? '—',
+        ));
+        $console->newLine();
+
+        foreach ($confirmations as $id => $confirmation) {
+            $console->writeln(\sprintf('  %s → %s', $id, $confirmation->value));
+        }
+
+        $console->writeln('');
+        $console->writeln('Une confirmation ne vaut que pour l\'acte qu\'elle accompagne : elle ne se garde');
+        $console->writeln('pas d\'une requête à l\'autre, et la surface qui pose l\'acte est celle qui la');
+        $console->writeln('demande.');
     }
 
     /**

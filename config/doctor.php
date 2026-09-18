@@ -6,6 +6,7 @@ use ArnaudMoncondhuy\Authorization\Authorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\DoctorCommand;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSketch;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSurvey;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseConfirmationWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseProofWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
@@ -40,6 +41,8 @@ return static function (ContainerConfigurator $container): void {
                 // dans une application qui n'exige aucune preuve, et la commande doit tourner
                 // là comme ailleurs.
                 param(RefuseProofWithoutJudgePass::JUDGE_PARAMETER),
+                // Et ce qui recueille une confirmation d'intention, sur le même principe.
+                param(RefuseConfirmationWithoutJudgePass::JUDGE_PARAMETER),
             ])
             ->tag('console.command')
     ;

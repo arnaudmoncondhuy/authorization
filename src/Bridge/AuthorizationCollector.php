@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\Authorization\Bridge;
 
+use ArnaudMoncondhuy\Authorization\Confirmation;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Proof;
@@ -45,6 +46,8 @@ final class AuthorizationCollector extends DataCollector
      * @param ?string       $judge     ce qui juge une preuve d'identité, ou nul quand rien ne
      *                                 le fait — auquel cas aucun droit n'en exige, la
      *                                 compilation s'y opposerait
+     * @param ?string       $witness   ce qui recueille une confirmation d'intention, sur le
+     *                                 même principe
      */
     public function __construct(
         private readonly TracingAuthorizer $traced,
@@ -54,6 +57,7 @@ final class AuthorizationCollector extends DataCollector
         private readonly ?string $onBehalf = null,
         private readonly ?string $directory = null,
         private readonly ?string $judge = null,
+        private readonly ?string $witness = null,
     ) {
     }
 
@@ -71,18 +75,29 @@ final class AuthorizationCollector extends DataCollector
         // son travail. Les additionner ferait passer le second pour le premier.
         $detoured = array_filter($required, static fn (array $call): bool => null !== $call['unproven']);
 
+        // Ni accordé ni refusé : l'acte attend qu'on dise qu'on en est sûr. Compté à part des
+        // deux autres pour la même raison qu'un détour l'est — ranger cela sous « refusé »
+        // ferait chercher un droit manquant là où il n'en manque aucun.
+        $unconfirmed = array_filter($required, static fn (array $call): bool => null !== $call['unconfirmed']);
+
         $this->data = [
             'contract' => $this->traced->wraps(),
             'onBehalf' => $this->onBehalf,
             'directory' => $this->directory,
             'judge' => $this->judge,
+            'witness' => $this->witness,
             'proofs' => array_map(static fn (Proof $proof): string => $proof->value, $this->catalog->proofs()),
+            'confirmations' => array_map(
+                static fn (Confirmation $confirmation): string => $confirmation->value,
+                $this->catalog->confirmations(),
+            ),
             'detoured' => \count($detoured),
+            'unconfirmed' => \count($unconfirmed),
             'voters' => $coverage->voters,
             'catalog' => \count($this->catalog->ids()),
             'touched' => \count(array_unique(array_column($calls, 'id'))),
             'granted' => \count($granted),
-            'refused' => \count($required) - \count($granted) - \count($detoured),
+            'refused' => \count($required) - \count($granted) - \count($detoured) - \count($unconfirmed),
             'verbs' => $this->verbsOf($calls),
             'unjudged' => array_map(static fn (Permission $permission): string => $permission->id(), $unjudged),
             'shared' => $coverage->shared(),
@@ -185,6 +200,36 @@ final class AuthorizationCollector extends DataCollector
         $judge = $this->data['judge'] ?? null;
 
         return \is_string($judge) ? $judge : null;
+    }
+
+    /**
+     * Les droits détenus que l'appelant n'avait pas confirmé vouloir exercer : l'acte attend
+     * une confirmation, il n'est pas refusé.
+     */
+    public function unconfirmed(): int
+    {
+        return (int) ($this->data['unconfirmed'] ?? 0);
+    }
+
+    /**
+     * Les droits qui réclament une confirmation d'intention, avec le niveau demandé.
+     *
+     * @return array<string, string>
+     */
+    public function confirmations(): array
+    {
+        /** @var array<string, string> $confirmations */
+        $confirmations = $this->data['confirmations'] ?? [];
+
+        return $confirmations;
+    }
+
+    /** Ce qui recueille une confirmation, ou nul quand aucun droit n'en réclame. */
+    public function witness(): ?string
+    {
+        $witness = $this->data['witness'] ?? null;
+
+        return \is_string($witness) ? $witness : null;
     }
 
     /** Les droits que le code exige, tous contextes confondus. */

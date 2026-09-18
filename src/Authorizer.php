@@ -27,13 +27,16 @@ interface Authorizer
      * S'appelle en tête de traitement : ce qui suit ne doit être ni lu ni écrit tant que le
      * droit n'est pas acquis.
      *
-     * Deux façons de ne pas passer, et il faut les distinguer : le droit manque, ou l'identité
-     * n'est pas prouvée au niveau que ce droit exige — {@see RequiresPermission::$proof}. La
-     * première se répare en accordant, la seconde en présentant un moyen, et confondre les deux
-     * enverrait quelqu'un chez son administrateur quand il n'avait qu'à ressortir son téléphone.
+     * Trois façons de ne pas passer, et il faut les distinguer : le droit manque, l'identité
+     * n'est pas prouvée au niveau que ce droit exige — {@see RequiresPermission::$proof} —, ou
+     * l'acte n'a pas été confirmé — {@see RequiresPermission::$confirmation}. La première se
+     * répare en accordant, la deuxième en présentant un moyen, la troisième en recopiant ce que
+     * l'écran demande. Les confondre enverrait quelqu'un chez son administrateur, ou chercher
+     * son téléphone, quand il n'avait qu'à relire ce qu'il s'apprêtait à faire.
      *
      * @throws MissingPermission
      * @throws InsufficientProof
+     * @throws MissingConfirmation
      */
     public function require(Permission $permission): void;
 }

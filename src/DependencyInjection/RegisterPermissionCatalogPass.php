@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ArnaudMoncondhuy\Authorization\DependencyInjection;
 
+use ArnaudMoncondhuy\Authorization\Confirmation;
 use ArnaudMoncondhuy\Authorization\Permission;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
 use ArnaudMoncondhuy\Authorization\Proof;
@@ -37,12 +38,20 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
      */
     public const string REQUIRED_PROOFS_PARAMETER = 'authorization.required_proofs';
 
+    /**
+     * Les droits qui réclament une confirmation d'intention, et laquelle : `['workspace.handover'
+     * => 'secret']`. Posé même vide, pour la même raison que le précédent.
+     */
+    public const string REQUIRED_CONFIRMATIONS_PARAMETER = 'authorization.required_confirmations';
+
     public function process(ContainerBuilder $container): void
     {
         /** @var array<string, Permission> $collected */
         $collected = [];
         /** @var array<string, Proof> $proofs */
         $proofs = [];
+        /** @var array<string, Confirmation> $confirmations */
+        $confirmations = [];
         $collisions = [];
 
         foreach (array_keys($container->findTaggedServiceIds(Tag::USE_CASE)) as $service) {
@@ -63,6 +72,10 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
                 // même risque. Retenir le plus faible ferait d'un cas d'usage ajouté demain
                 // l'affaiblissement silencieux d'un droit déjà protégé.
                 $proofs[$id] = Proof::strongest($proofs[$id] ?? Proof::None, $declaration->proof);
+                $confirmations[$id] = Confirmation::strongest(
+                    $confirmations[$id] ?? Confirmation::None,
+                    $declaration->confirmation,
+                );
 
                 // Comparés par valeur et non par classe : deux cas d'une même énumération qui
                 // rendraient la même identité désigneraient deux droits distincts sous un seul
@@ -85,8 +98,14 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
         $required = array_filter($proofs, static fn (Proof $proof): bool => Proof::None !== $proof);
         ksort($required);
 
+        $confirmed = array_filter(
+            $confirmations,
+            static fn (Confirmation $confirmation): bool => Confirmation::None !== $confirmation,
+        );
+        ksort($confirmed);
+
         $container->register(PermissionCatalog::class, PermissionCatalog::class)
-            ->setArguments([array_values($collected), $required]);
+            ->setArguments([array_values($collected), $required, $confirmed]);
 
         // La liste, en valeurs plutôt qu'en cas d'énumération : elle se lit depuis un conteneur
         // compilé, et c'est elle que RefuseProofWithoutJudgePass interroge pour savoir s'il
@@ -95,6 +114,11 @@ final readonly class RegisterPermissionCatalogPass implements CompilerPassInterf
         $container->setParameter(
             self::REQUIRED_PROOFS_PARAMETER,
             array_map(static fn (Proof $proof): string => $proof->value, $required),
+        );
+
+        $container->setParameter(
+            self::REQUIRED_CONFIRMATIONS_PARAMETER,
+            array_map(static fn (Confirmation $confirmation): string => $confirmation->value, $confirmed),
         );
     }
 

@@ -7,6 +7,7 @@ use ArnaudMoncondhuy\Authorization\Bridge\AuthorizationCollector;
 use ArnaudMoncondhuy\Authorization\Bridge\TracingAuthorizer;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSketch;
 use ArnaudMoncondhuy\Authorization\Bridge\VoterSurvey;
+use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseConfirmationWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseProofWithoutJudgePass;
 use ArnaudMoncondhuy\Authorization\DependencyInjection\RefuseUserAuthorizerWithoutProviderPass;
 use ArnaudMoncondhuy\Authorization\PermissionCatalog;
@@ -50,6 +51,7 @@ return static function (ContainerConfigurator $container): void {
                 // Et ce qui juge une preuve d'identité, pour la même raison : le nom suffit à
                 // le nommer, et l'injecter le compterait utilisé.
                 param(RefuseProofWithoutJudgePass::JUDGE_PARAMETER),
+                param(RefuseConfirmationWithoutJudgePass::JUDGE_PARAMETER),
             ])
             ->tag('data_collector', [
                 'id' => AuthorizationCollector::NAME,
